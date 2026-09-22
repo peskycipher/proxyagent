@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS purchases (
   address_in TEXT,
   seconds INTEGER NOT NULL,
   amount_usd_cents INTEGER NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','confirmed','expired')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','confirmed','expired','underpaid')),
   created_at INTEGER NOT NULL,
   confirmed_at INTEGER
 );

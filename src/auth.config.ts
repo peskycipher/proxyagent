@@ -5,6 +5,8 @@ import type { NextAuthConfig } from "next-auth";
  * The credentials provider (which touches SQLite) is added in src/auth.ts.
  */
 export const authConfig = {
+  // Self-hosted behind reverse proxies/tunnels: trust the configured host.
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: { signIn: "/login", error: "/login" },
   callbacks: {

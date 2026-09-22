@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       const send = (event: string, data: unknown) => {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
-      let meter = new Meter();
+      let meter: Meter | null = null; // starts only when the model request begins
       let assistantContent = "";
       let billed = 0;
       let cleanedUp = false;
@@ -73,8 +73,10 @@ export async function POST(req: Request) {
         if (cleanedUp) return;
         cleanedUp = true;
         try {
-          billed = meter.stop();
-          debit(userId, billed, `chat:${effectiveChatId}`);
+          if (meter) billed = meter.stop();
+          if (billed > 0) {
+            debit(userId, billed, `chat:${effectiveChatId}`);
+          }
           if (assistantContent) {
             db.prepare("INSERT INTO messages (id, chat_id, role, content, billed_seconds, created_at) VALUES (?,?,?,?,?,?)").run(
               newId("msg"), effectiveChatId, "assistant", assistantContent, billed, Date.now(),
@@ -108,6 +110,9 @@ export async function POST(req: Request) {
         }
 
         send("chat_meta", { chatId: effectiveChatId });
+
+        // Billing starts here — warmup time is free for the user.
+        meter = new Meter();
 
         const reader = upstreamRes.body.getReader();
         const decoder = new TextDecoder();

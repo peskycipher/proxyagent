@@ -1,6 +1,9 @@
 /**
- * Runpod REST v2 pod control. Verified against the live API + OpenAPI spec
- * (https://api.runpod.io/v2/openapi.json) on 2026-09-22.
+ * Runpod REST v2 pod control. Verified against the live API 2026-09-22:
+ * - GET /v2/pods/{id} returns `status` (PROVISIONING|STARTING|RUNNING|EXITED|ERROR|TERMINATED)
+ *   and `actions` — NOT the v1 `desiredStatus` (spec/live drift: trust the API).
+ * - POST /v2/pods/{id}/action with {"action":"start"|"stop"}; invalid transitions
+ *   return 409 (e.g. stop on EXITED), capacity failures 400.
  */
 
 const API_BASE = "https://api.runpod.io/v2";
@@ -31,12 +34,12 @@ async function runpodFetch(path: string, init?: RequestInit): Promise<Response> 
   });
 }
 
-export async function getPod(): Promise<{ desiredStatus: string; runtimeStatus: string | null; actions: string[] }> {
+export async function getPod(): Promise<{ status: string; runtimeStatus: string | null; actions: string[] }> {
   const res = await runpodFetch("");
   if (!res.ok) throw new Error(`getPod failed: ${res.status}`);
-  const body = (await res.json()) as { desiredStatus?: string; runtimeStatus?: string; actions?: string[] };
+  const body = (await res.json()) as { status?: string; runtimeStatus?: string; actions?: string[] };
   return {
-    desiredStatus: body.desiredStatus ?? "UNKNOWN",
+    status: body.status ?? "UNKNOWN",
     runtimeStatus: body.runtimeStatus ?? null,
     actions: body.actions ?? [],
   };

@@ -23,7 +23,10 @@ export function idleSeconds(): number {
 export async function ensurePodUp(onStatus?: (msg: string) => void): Promise<void> {
   touchPodActivity();
   const pod = await getPod();
-  if (pod.desiredStatus !== "RUNNING") {
+  if (pod.status === "ERROR") {
+    throw new Error("pod is in ERROR state on Runpod — check the Runpod console");
+  }
+  if (pod.status !== "RUNNING") {
     onStatus?.("pod_starting");
     await startPod();
   }
@@ -50,7 +53,7 @@ function startIdleStopper(): void {
       if (lastActivityAt === 0) return;
       if (Date.now() - lastActivityAt < IDLE_TIMEOUT_MS()) return;
       const pod = await getPod();
-      if (pod.desiredStatus === "RUNNING") {
+      if (pod.status === "RUNNING") {
         await stopPod();
         console.log("pod stopped after idle timeout");
       }

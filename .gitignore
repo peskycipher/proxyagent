@@ -1,0 +1,12 @@
+node_modules/
+.next/
+data/
+.env
+.env.local
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+next-env.d.ts
+tsconfig.tsbuildinfo
+runpod-api-inventory.md

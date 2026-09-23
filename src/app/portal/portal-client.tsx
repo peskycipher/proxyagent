@@ -3,6 +3,34 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
+import btcIcon from "cryptocurrency-icons/svg/color/btc.svg";
+import zecIcon from "cryptocurrency-icons/svg/color/zec.svg";
+import usdtIcon from "cryptocurrency-icons/svg/color/usdt.svg";
+import ltcIcon from "cryptocurrency-icons/svg/color/ltc.svg";
+import ethIcon from "cryptocurrency-icons/svg/color/eth.svg";
+import dogeIcon from "cryptocurrency-icons/svg/color/doge.svg";
+import xmrIcon from "cryptocurrency-icons/svg/color/xmr.svg";
+import usdtTrc20Icon from "./icons/usdt-trc20.svg"; // TRON-red USDT for the TRC-20 network
+import { iconUrl, type IconAsset } from "@/lib/icon-url";
+
+/**
+ * Icon map keyed by base ticker (last path segment of the CryptAPI ticker);
+ * network-qualified overrides (full coin id) win over the base ticker.
+ */
+const ICONS: Record<string, IconAsset> = {
+  btc: btcIcon,
+  zec: zecIcon,
+  usdt: usdtIcon,
+  trc20_usdt: usdtTrc20Icon,
+  ltc: ltcIcon,
+  eth: ethIcon,
+  doge: dogeIcon,
+  xmr: xmrIcon,
+};
+
+function iconFor(coin: string): IconAsset | undefined {
+  return ICONS[coin] ?? ICONS[coin.split("_").pop() ?? ""];
+}
 
 interface Tier {
   hours: number;
@@ -30,6 +58,11 @@ function fmt(seconds: number): string {
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
   return h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+/** Coin id -> display label: "trc20_usdt" -> "TRC20 USDT", "btc" -> "BTC". */
+function coinLabel(coin: string): string {
+  return coin.replace(/_/g, " ").toUpperCase();
 }
 
 export default function PortalClient({
@@ -125,16 +158,43 @@ export default function PortalClient({
           {coins.length > 0 && (
             <div>
               <div className="muted" style={{ marginBottom: 4 }}>Pay with</div>
-              <select className="input" value={coin} onChange={(e) => setCoin(e.target.value)} style={{ width: 200 }}>
-                {coins.map((c) => (
-                  <option key={c} value={c}>{c.toUpperCase()}</option>
-                ))}
-              </select>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {coins.map((c) => {
+                  const icon = iconFor(c);
+                  const selected = coin === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      title={coinLabel(c)}
+                      aria-pressed={selected}
+                      onClick={() => setCoin(c)}
+                      style={{
+                        display: "grid",
+                        placeItems: "center",
+                        width: 44,
+                        height: 44,
+                        borderRadius: "50%",
+                        border: selected ? "2px solid var(--accent)" : "2px solid var(--border)",
+                        background: selected ? "var(--bg)" : "transparent",
+                        cursor: "pointer",
+                        padding: 4,
+                      }}
+                    >
+                      {icon ? (
+                        <img src={iconUrl(icon)} alt={coinLabel(c)} width={30} height={30} />
+                      ) : (
+                        <span style={{ fontSize: 16, fontWeight: 700 }}>{coinLabel(c).charAt(0)}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
           {selectedTier && (
             <button className="btn btn-primary" onClick={buy} disabled={busy || coins.length === 0}>
-              {busy ? "Creating…" : `Buy ${selectedHours}h — $${(selectedTier.cents / 100).toFixed(2)} in ${coin.toUpperCase()}`}
+              {busy ? "Creating…" : `Buy ${selectedHours}h — $${(selectedTier.cents / 100).toFixed(2)} in ${coinLabel(coin)}`}
             </button>
           )}
           {error && <div className="error">{error}</div>}
@@ -164,7 +224,7 @@ export default function PortalClient({
               {purchases.map((p) => (
                 <tr key={p.id}>
                   <td style={{ padding: "6px 0" }}>{fmt(p.seconds)}</td>
-                  <td className="muted">{p.coin.toUpperCase()}</td>
+                  <td className="muted">{coinLabel(p.coin)}</td>
                   <td className="muted">{new Date().toLocaleDateString()}</td>
                   <td style={{ textAlign: "right" }}>
                     ${(p.amountUsdCents / 100).toFixed(2)}{" "}

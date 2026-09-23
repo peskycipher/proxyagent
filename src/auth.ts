@@ -4,6 +4,7 @@ import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
 import { authConfig } from "@/auth.config";
 import { getUserByEmail, verifyPassword, upsertUserByEmail } from "@/lib/users";
+import { oauthVerifiedEmail } from "@/lib/oauth";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -31,16 +32,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     ...authConfig.callbacks,
     // JWT strategy: stamp the LOCAL user id onto the token. Credentials
     // users already carry their db id; OAuth users are linked or created
-    // by verified email (see upsertUserByEmail).
-    async jwt({ token, user }) {
+    // by VERIFIED email only (see oauthVerifiedEmail) — an unverified
+    // provider email aborts the sign-in instead of linking, so an
+    // attacker-controlled provider account cannot take over a local
+    // account by claiming its email address.
+    async jwt({ token, user, account, profile }) {
       if (user) {
-        const localId =
-          typeof user.id === "string" && user.id.startsWith("usr_")
-          ? user.id
-          : user.email
-            ? await upsertUserByEmail(user.email)
-            : null;
-        if (localId) token.uid = localId;
+        if (typeof user.id === "string" && user.id.startsWith("usr_")) {
+          token.uid = user.id;
+        } else if (user.email) {
+          const verified = await oauthVerifiedEmail(account, user, profile);
+          if (!verified) throw new Error("OAuthEmailNotVerified");
+          const localId = await upsertUserByEmail(verified);
+          if (localId) token.uid = localId;
+        }
       }
       return token;
     },

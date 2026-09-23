@@ -36,4 +36,4 @@ CryptAPI must be able to reach your dev machine: run behind a tunnel (e.g. `clou
 | `GET /api/purchases/:id` | ✓ | purchase status |
 | `GET /api/webhooks/gateway/:secret` | signature | CryptAPI callback (responds `*ok*`) |
 | `POST /api/chat` | ✓ | SSE stream `{chatId?, message}`; events: `status`, `chat_meta`, `token`, `done`, `error` |
-| `GET /api/chats`, `GET /api/chats/:id` | ✓ | chat history |
+| `GET /api/chats`, `GET /api/chats/:id` | ✓ | chat history |# proxyagent

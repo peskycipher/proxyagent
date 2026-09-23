@@ -6,7 +6,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await params;
-  const purchase = getPurchase(id);
+  const purchase = await getPurchase(id);
   if (!purchase || purchase.user_id !== session.user.id) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }

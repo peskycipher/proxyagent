@@ -12,13 +12,13 @@ export const dynamic = "force-dynamic";
 export default async function Portal() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login?next=/portal");
-  const user = getUserById(session.user.id)!;
-  const purchases = listPurchases(user.id);
+  const user = (await getUserById(session.user.id))!;
+  const purchases = await listPurchases(user.id);
 
   return (
     <PortalClient
       email={user.email}
-      balanceSeconds={balanceSeconds(user.id)}
+      balanceSeconds={await balanceSeconds(user.id)}
       tiers={TIERS.map((t) => ({ hours: t.hours, discount: t.discount, cents: priceUsdCents(t.hours) }))}
       coins={acceptedCoins()}
       purchases={purchases.map((p) => ({

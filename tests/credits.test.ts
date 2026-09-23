@@ -12,7 +12,7 @@ async function fresh() {
   const dbMod = await import("@/lib/db");
   const creditsMod = await import("@/lib/credits");
   const usersMod = await import("@/lib/users");
-  return { db: dbMod.getDb(), ...creditsMod, ...usersMod };
+  return { db: await dbMod.getDb(), ...creditsMod, ...usersMod };
 }
 
 afterEach(() => {
@@ -33,41 +33,41 @@ describe("credits", () => {
 
   it("credits and debits with an audit ledger, balance = sum(delta)", async () => {
     const m = await fresh();
-    const uid = m.createUser("a@example.com", "password123");
-    m.credit(uid, 3600, "purchase:test-1");
-    m.credit(uid, 60, "purchase:test-2");
-    expect(m.balanceSeconds(uid)).toBe(3660);
+    const uid = await m.createUser("a@example.com", "password123");
+    await m.credit(uid, 3600, "purchase:test-1");
+    await m.credit(uid, 60, "purchase:test-2");
+    expect(await m.balanceSeconds(uid)).toBe(3660);
 
-    m.debit(uid, 90, "chat:msg-1");
-    expect(m.balanceSeconds(uid)).toBe(3570);
+    await m.debit(uid, 90, "chat:msg-1");
+    expect(await m.balanceSeconds(uid)).toBe(3570);
 
-    const txns = m.txnsFor(uid);
+    const txns = await m.txnsFor(uid);
     expect(txns.map((t) => t.delta_seconds)).toEqual([3600, 60, -90]);
   });
 
   it("refuses to debit below zero", async () => {
     const m = await fresh();
-    const uid = m.createUser("b@example.com", "password123");
-    m.credit(uid, 10, "purchase:t");
-    expect(() => m.debit(uid, 11, "chat:m")).toThrow(/insufficient/i);
-    expect(m.balanceSeconds(uid)).toBe(10);
+    const uid = await m.createUser("b@example.com", "password123");
+    await m.credit(uid, 10, "purchase:t");
+    await expect(m.debit(uid, 11, "chat:m")).rejects.toThrow(/insufficient/i);
+    expect(await m.balanceSeconds(uid)).toBe(10);
   });
 
   it("debit from zero balance throws", async () => {
     const m = await fresh();
-    const uid = m.createUser("c@example.com", "password123");
-    expect(() => m.debit(uid, 1, "chat:m")).toThrow(/insufficient/i);
+    const uid = await m.createUser("c@example.com", "password123");
+    await expect(m.debit(uid, 1, "chat:m")).rejects.toThrow(/insufficient/i);
   });
 
   it("concurrent debits never drive balance negative", async () => {
     const m = await fresh();
-    const uid = m.createUser("d@example.com", "password123");
-    m.credit(uid, 100, "purchase:t");
+    const uid = await m.createUser("d@example.com", "password123");
+    await m.credit(uid, 100, "purchase:t");
     const results = await Promise.allSettled(
       Array.from({ length: 8 }, (_, i) => Promise.resolve().then(() => m.debit(uid, 30, `chat:m${i}`))),
     );
     const fulfilled = results.filter((r) => r.status === "fulfilled").length;
     expect(fulfilled).toBe(3); // only 3 x 30s fit in 100s
-    expect(m.balanceSeconds(uid)).toBe(10);
+    expect(await m.balanceSeconds(uid)).toBe(10);
   });
 });

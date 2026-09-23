@@ -16,15 +16,14 @@ export function verifyPassword(password: string, stored: string): boolean {
   return timingSafeEqual(hash, Buffer.from(hashHex, "hex"));
 }
 
-export function createUser(email: string, password: string): string {
+export async function createUser(email: string, password: string): Promise<string> {
   const normalized = email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) throw new Error("invalid email");
   if (password.length < 8) throw new Error("password must be at least 8 characters");
   const id = newId("usr");
   try {
-    getDb()
-      .prepare("INSERT INTO users (id, email, password_hash, balance_seconds, created_at) VALUES (?,?,?,0,?)")
-      .run(id, normalized, hashPassword(password), Date.now());
+    await (await getDb())
+      .run("INSERT INTO users (id, email, password_hash, balance_seconds, created_at) VALUES (?,?,?,0,?)", id, normalized, hashPassword(password), Date.now());
   } catch (e) {
     if (String((e as Error).message).includes("UNIQUE")) throw new Error("email already registered");
     throw e;
@@ -32,16 +31,41 @@ export function createUser(email: string, password: string): string {
   return id;
 }
 
-export function getUserByEmail(email: string): { id: string; email: string; password_hash: string; balance_seconds: number } | null {
-  const row = getDb()
-    .prepare("SELECT id, email, password_hash, balance_seconds FROM users WHERE email = ?")
-    .get(email.trim().toLowerCase()) as { id: string; email: string; password_hash: string; balance_seconds: number } | undefined;
+/**
+ * OAuth sign-in: find the local user by email, or create one with an
+ * unusable password hash (OAuth users never sign in with a password).
+ * Returns null for an invalid email.
+ */
+export async function upsertUserByEmail(email: string): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return null;
+  const db = await getDb();
+  const existing = await db.get<{ id: string }>("SELECT id FROM users WHERE email = ?", normalized);
+  if (existing) return existing.id;
+  const id = newId("usr");
+  try {
+    const throwaway = hashPassword(randomBytes(32).toString("hex"));
+    await db.run("INSERT INTO users (id, email, password_hash, balance_seconds, created_at) VALUES (?,?,?,0,?)", id, normalized, throwaway, Date.now());
+  } catch (e) {
+    if (!String((e as Error).message).includes("UNIQUE")) throw e;
+    // Concurrent insert won the race — fall back to a read.
+    const row = await db.get<{ id: string }>("SELECT id FROM users WHERE email = ?", normalized);
+    return row?.id ?? null;
+  }
+  return id;
+}
+
+export async function getUserByEmail(email: string): Promise<{ id: string; email: string; password_hash: string; balance_seconds: number } | null> {
+  const row = await (await getDb())
+    .get<{ id: string; email: string; password_hash: string; balance_seconds: number }>(
+      "SELECT id, email, password_hash, balance_seconds FROM users WHERE email = ?",
+      email.trim().toLowerCase(),
+    );
   return row ?? null;
 }
 
-export function getUserById(id: string): { id: string; email: string; balance_seconds: number } | null {
-  const row = getDb()
-    .prepare("SELECT id, email, balance_seconds FROM users WHERE id = ?")
-    .get(id) as { id: string; email: string; balance_seconds: number } | undefined;
+export async function getUserById(id: string): Promise<{ id: string; email: string; balance_seconds: number } | null> {
+  const row = await (await getDb())
+    .get<{ id: string; email: string; balance_seconds: number }>("SELECT id, email, balance_seconds FROM users WHERE id = ?", id);
   return row ?? null;
 }

@@ -35,7 +35,7 @@ async function handle(req: Request, { params }: { params: Promise<{ secret: stri
     return new Response("unauthorized", { status: 401 });
   }
 
-  const purchase = getPurchase(invoiceId);
+  const purchase = await getPurchase(invoiceId);
   if (!purchase) return new Response("unknown invoice", { status: 400 });
 
   const pending = url.searchParams.get("pending");
@@ -55,7 +55,7 @@ async function handle(req: Request, { params }: { params: Promise<{ secret: stri
         // ignore malformed conversion data
       }
     }
-    confirmPurchase(invoiceId, uuid || `unverified_${Date.now()}`, receivedUsdCents);
+    await confirmPurchase(invoiceId, uuid || `unverified_${Date.now()}`, receivedUsdCents);
   }
   // pending=1 callbacks only acknowledge detection; no crediting.
 

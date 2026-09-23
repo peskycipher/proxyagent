@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "coin not supported" }, { status: 400 });
   }
 
-  const purchase = createPurchase(session.user.id, hours, coin);
+  const purchase = await createPurchase(session.user.id, hours, coin);
 
   // Unique callback URL (CryptAPI treats it as the charge id) carrying our
   // secret path segment + invoice id + one-time nonce, echoed back in callbacks.
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 
   try {
     const charge = await createCharge({ coin, payoutAddress: payout, callbackUrl });
-    attachCharge(purchase.id, charge.addressIn);
+    await attachCharge(purchase.id, charge.addressIn);
     return NextResponse.json({
       purchaseId: purchase.id,
       addressIn: charge.addressIn,

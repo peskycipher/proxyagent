@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "email and a password of at least 8 characters required" }, { status: 400 });
   }
   try {
-    createUser(parsed.data.email, parsed.data.password);
+    await createUser(parsed.data.email, parsed.data.password);
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

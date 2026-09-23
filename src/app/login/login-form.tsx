@@ -1,10 +1,71 @@
-import { Suspense } from "react";
-import LoginForm from "./login-form";
+"use client";
 
-export default function LoginPage() {
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { signIn } from "next-auth/react";
+
+const OAUTH_ERRORS: Record<string, string> = {
+  OAuthSignin: "Could not start the sign-in provider. Try again.",
+  OAuthCallback: "The provider returned an error. Try again.",
+  OAuthAccountNotLinked: "That email is already registered with a different sign-in method.",
+  Callback: "Sign-in failed. Try again.",
+};
+
+export default function LoginForm({ oauth }: { oauth: { google: boolean; github: boolean } }) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const oauthError = OAUTH_ERRORS[params.get("error") ?? ""];
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    const res = await signIn("credentials", { email, password, redirect: false });
+    if (res?.error) {
+      setError("Invalid email or password");
+      setBusy(false);
+      return;
+    }
+    router.push(params.get("next") || "/portal");
+    router.refresh();
+  }
+
   return (
-    <Suspense fallback={<main style={{ maxWidth: 380, margin: "100px auto", padding: "0 20px" }}><div className="panel" style={{ padding: 28 }}>Loading…</div></main>}>
-      <LoginForm />
-    </Suspense>
+    <main style={{ maxWidth: 380, margin: "100px auto", padding: "0 20px" }}>
+      <div className="panel" style={{ padding: 28 }}>
+        <h1 style={{ marginTop: 0 }}>Log in</h1>
+        {oauthError && <div className="error">{oauthError}</div>}
+        {(oauth.google || oauth.github) && (
+          <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+            {oauth.google && (
+              <button className="btn" type="button" onClick={() => signIn("google", { callbackUrl: params.get("next") || "/portal" })}>
+                Continue with Google
+              </button>
+            )}
+            {oauth.github && (
+              <button className="btn" type="button" onClick={() => signIn("github", { callbackUrl: params.get("next") || "/portal" })}>
+                Continue with GitHub
+              </button>
+            )}
+            <div className="muted" style={{ textAlign: "center", fontSize: 13 }}>or</div>
+          </div>
+        )}
+        <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
+          <input className="input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input className="input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          {error && <div className="error">{error}</div>}
+          <button className="btn btn-primary" disabled={busy} type="submit">{busy ? "Logging in…" : "Log in"}</button>
+        </form>
+        <p className="muted" style={{ marginTop: 16 }}>
+          No account? <Link href="/signup">Sign up</Link>
+        </p>
+      </div>
+    </main>
   );
 }

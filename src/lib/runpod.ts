@@ -4,6 +4,10 @@
  *   and `actions` — NOT the v1 `desiredStatus` (spec/live drift: trust the API).
  * - POST /v2/pods/{id}/action with {"action":"start"|"stop"}; invalid transitions
  *   return 409 (e.g. stop on EXITED), capacity failures 400.
+ *
+ * POLICY: this client is stop/start ONLY. Never add terminate/destroy/delete
+ * calls here — the pod (and any attached network volume) must outlive app
+ * restarts and idle timeouts. Termination is a manual Runpod-console action.
  */
 
 const API_BASE = "https://api.runpod.io/v2";

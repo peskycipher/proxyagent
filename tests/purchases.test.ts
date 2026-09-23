@@ -48,8 +48,8 @@ describe("gateway webhook signature", () => {
 describe("purchases", () => {
   it("creates a purchase with tier price and seconds", async () => {
     const { createUser, createPurchase } = await fresh();
-    const uid = createUser("u1@example.com", "password123");
-    const p = createPurchase(uid, 3, "btc");
+    const uid = await createUser("u1@example.com", "password123");
+    const p = await createPurchase(uid, 3, "btc");
     expect(p.amount_usd_cents).toBe(302);
     expect(p.seconds).toBe(10800);
     expect(p.status).toBe("pending");
@@ -57,23 +57,23 @@ describe("purchases", () => {
 
   it("confirmPurchase is idempotent and credits exactly once", async () => {
     const { createUser, createPurchase, confirmPurchase, balanceSeconds, txnsFor } = await fresh();
-    const uid = createUser("u2@example.com", "password123");
-    const p = createPurchase(uid, 1, "btc");
-    const first = confirmPurchase(p.id, "uuid-1", 106);
+    const uid = await createUser("u2@example.com", "password123");
+    const p = await createPurchase(uid, 1, "btc");
+    const first = await confirmPurchase(p.id, "uuid-1", 106);
     expect(first!.credited).toBe(true);
-    const second = confirmPurchase(p.id, "uuid-2", 106);
+    const second = await confirmPurchase(p.id, "uuid-2", 106);
     expect(second!.credited).toBe(false); // already confirmed
-    expect(balanceSeconds(uid)).toBe(3600);
-    expect(txnsFor(uid).length).toBe(1);
+    expect(await balanceSeconds(uid)).toBe(3600);
+    expect((await txnsFor(uid)).length).toBe(1);
   });
 
   it("marks underpaid purchases and credits nothing", async () => {
     const { createUser, createPurchase, confirmPurchase, balanceSeconds, getPurchase } = await fresh();
-    const uid = createUser("u3@example.com", "password123");
-    const p = createPurchase(uid, 12, "ltc");
-    const res = confirmPurchase(p.id, "uuid-3", 500); // under 1081-2% tolerance
+    const uid = await createUser("u3@example.com", "password123");
+    const p = await createPurchase(uid, 12, "ltc");
+    const res = await confirmPurchase(p.id, "uuid-3", 500); // under 1081-2% tolerance
     expect(res!.credited).toBe(false);
-    expect(getPurchase(p.id)!.status).toBe("underpaid");
-    expect(balanceSeconds(uid)).toBe(0);
+    expect((await getPurchase(p.id))!.status).toBe("underpaid");
+    expect(await balanceSeconds(uid)).toBe(0);
   });
 });

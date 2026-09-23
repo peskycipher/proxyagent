@@ -32,28 +32,26 @@ export async function POST(req: Request) {
     return Response.json({ error: "another request is already streaming for this account" }, { status: 429 });
   }
 
-  if (balanceSeconds(userId) < 1) {
+  if ((await balanceSeconds(userId)) < 1) {
     return Response.json({ error: "insufficient credits — buy more time in the portal" }, { status: 402 });
   }
 
-  const db = getDb();
+  const db = await getDb();
   const chatRow = chatId
-    ? (db.prepare("SELECT id FROM chats WHERE id = ? AND user_id = ?").get(chatId, userId) as { id: string } | undefined)
+    ? (await db.get<{ id: string }>("SELECT id FROM chats WHERE id = ? AND user_id = ?", chatId, userId))
     : undefined;
   const effectiveChatId = chatRow?.id ?? newId("chat");
   if (!chatRow) {
-    db.prepare("INSERT INTO chats (id, user_id, title, created_at) VALUES (?,?,?,?)").run(
+    await db.run(
+      "INSERT INTO chats (id, user_id, title, created_at) VALUES (?,?,?,?)",
       effectiveChatId, userId, message.slice(0, 60), Date.now(),
     );
   }
   const userMsgId = newId("msg");
-  db.prepare("INSERT INTO messages (id, chat_id, role, content, created_at) VALUES (?,?,?,?,?)").run(
-    userMsgId, effectiveChatId, "user", message, Date.now(),
-  );
+  await db.run("INSERT INTO messages (id, chat_id, role, content, created_at) VALUES (?,?,?,?,?)", userMsgId, effectiveChatId, "user", message, Date.now());
 
-  const history = db
-    .prepare("SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at ASC")
-    .all(effectiveChatId) as Array<{ role: string; content: string }>;
+  const history = await db
+    .all<{ role: string; content: string }>("SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at ASC", effectiveChatId);
 
   inFlight.add(userId);
   const encoder = new TextEncoder();
@@ -69,20 +67,21 @@ export async function POST(req: Request) {
       let billed = 0;
       let cleanedUp = false;
 
-      const cleanup = () => {
+      const cleanup = async () => {
         if (cleanedUp) return;
         cleanedUp = true;
         try {
           if (meter) billed = meter.stop();
           if (billed > 0) {
-            debit(userId, billed, `chat:${effectiveChatId}`);
+            await debit(userId, billed, `chat:${effectiveChatId}`);
           }
           if (assistantContent) {
-            db.prepare("INSERT INTO messages (id, chat_id, role, content, billed_seconds, created_at) VALUES (?,?,?,?,?,?)").run(
+            await db.run(
+              "INSERT INTO messages (id, chat_id, role, content, billed_seconds, created_at) VALUES (?,?,?,?,?,?)",
               newId("msg"), effectiveChatId, "assistant", assistantContent, billed, Date.now(),
             );
           }
-          send("done", { billedSeconds: billed, chatId: effectiveChatId, balanceSeconds: balanceSeconds(userId) });
+          send("done", { billedSeconds: billed, chatId: effectiveChatId, balanceSeconds: await balanceSeconds(userId) });
         } catch (e) {
           // debit failure: log loudly, but the stream is already over
           console.error("chat cleanup error", (e as Error).message);

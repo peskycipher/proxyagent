@@ -21,7 +21,7 @@ export async function getGatewayPubKey(): Promise<string> {
 }
 
 export interface CreateChargeParams {
-  coin: string; // lowercase ticker, e.g. "btc", "ltc"
+  coin: string; // lowercase coin id, e.g. "btc", "trc20_usdt" (network-qualified)
   payoutAddress: string;
   callbackUrl: string; // must be unique per charge (embed invoice id + nonce)
   confirmations?: number;
@@ -33,17 +33,32 @@ export interface Charge {
   minimumTransactionCoin: number;
 }
 
+/**
+ * Coin id -> CryptAPI ticker: the last underscore becomes a path segment, so
+ * "trc20_usdt" -> "trc20/usdt" while plain coins ("btc", "zec") pass through.
+ */
+export function tickerFor(coin: string): string {
+  const i = coin.lastIndexOf("_");
+  return i === -1 ? coin : `${coin.slice(0, i)}/${coin.slice(i + 1)}`;
+}
+
 /** Create a payment address via CryptAPI. */
 export async function createCharge(params: CreateChargeParams): Promise<Charge> {
   const { coin, payoutAddress, callbackUrl, confirmations = 1 } = params;
   if (!payoutAddress) throw new Error(`no payout wallet configured for coin ${coin}`);
-  const url = new URL(`https://api.cryptapi.io/${encodeURIComponent(coin)}/create/`);
+  const ticker = tickerFor(coin).split("/").map(encodeURIComponent).join("/");
+  const url = new URL(`https://api.cryptapi.io/${ticker}/create/`);
   url.searchParams.set("callback", callbackUrl);
   url.searchParams.set("address", payoutAddress);
   url.searchParams.set("pending", "1");
   url.searchParams.set("confirmations", String(confirmations));
   const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
-  if (!res.ok) throw new Error(`gateway create failed: ${res.status}`);
+  if (!res.ok) {
+    // CryptAPI's error body names the actual problem (invalid address,
+    // unsupported coin, network mismatch) — surface it, don't discard it.
+    const detail = await res.text().catch(() => "");
+    throw new Error(`gateway create failed: ${res.status}${detail ? ` — ${detail.slice(0, 200)}` : ""}`);
+  }
   const body = (await res.json()) as Record<string, unknown>;
   if (body.status !== "success") {
     throw new Error(`gateway create error: ${body.error ?? JSON.stringify(body)}`);

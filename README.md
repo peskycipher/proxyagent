@@ -20,7 +20,7 @@ npm run dev            # http://localhost:3000
 npm test               # unit tests
 ```
 
-Required env: `AUTH_SECRET` (openssl rand -hex 32), `RUNPOD_API_KEY`, `RUNPOD_POD_ID`, `LLAMA_SERVER_URL`, `GATEWAY_WEBHOOK_SECRET`, `BASE_URL`, `CRYPTAPI_WALLETS_<COIN>` per accepted coin.
+Required env: `AUTH_SECRET` (openssl rand -hex 32), `RUNPOD_API_KEY`, `RUNPOD_POD_ID`, `LLAMA_SERVER_URL`, `GATEWAY_WEBHOOK_SECRET`, `BASE_URL`, `CRYPTAPI_WALLETS_<COIN>` per accepted coin (`COIN` id is the lowercase env suffix; network-qualified coins like `CRYPTAPI_WALLETS_TRC20_USDT` map to CryptAPI ticker `trc20/usdt`, and the address must be on that network).
 
 ## Webhook testing locally
 

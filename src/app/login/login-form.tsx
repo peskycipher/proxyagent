@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import GitHubMark from "@/components/github-mark";
 
 const OAUTH_ERRORS: Record<string, string> = {
   OAuthSignin: "Could not start the sign-in provider. Try again.",
@@ -54,7 +55,13 @@ export default function LoginForm({ oauth }: { oauth: { google: boolean; github:
               </button>
             )}
             {oauth.github && (
-              <button className="btn" type="button" onClick={() => signIn("github", { callbackUrl: params.get("next") || "/portal" })}>
+              <button
+                className="btn"
+                type="button"
+                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                onClick={() => signIn("github", { callbackUrl: params.get("next") || "/portal" })}
+              >
+                <GitHubMark />
                 Continue with GitHub
               </button>
             )}

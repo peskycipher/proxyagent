@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import GitHubMark from "@/components/github-mark";
 
 export default function SignupForm({ oauth }: { oauth: { google: boolean; github: boolean } }) {
   const router = useRouter();
@@ -49,7 +50,13 @@ export default function SignupForm({ oauth }: { oauth: { google: boolean; github
               </button>
             )}
             {oauth.github && (
-              <button className="btn" type="button" onClick={() => signIn("github", { callbackUrl: "/portal" })}>
+              <button
+                className="btn"
+                type="button"
+                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                onClick={() => signIn("github", { callbackUrl: "/portal" })}
+              >
+                <GitHubMark />
                 Continue with GitHub
               </button>
             )}

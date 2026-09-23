@@ -12,6 +12,18 @@
  *   the access token and require a `verified: true` entry matching the email.
  * - Anything else: fail closed (deny) until explicitly supported.
  */
+/**
+ * Short-TTL dedupe for GitHub /user/emails: a single sign-in asks the same
+ * question twice (signIn callback decision, then the jwt callback backstop)
+ * with the same token seconds apart. Cache per fetch client so distinct
+ * fetchImpls (tests) stay isolated; one sign-in costs one provider call.
+ */
+const verifiedCacheByFetch = new WeakMap<
+  typeof fetch,
+  Map<string, { email: string | null; expires: number }>
+>();
+const VERIFIED_EMAIL_TTL_MS = 60_000;
+
 export async function oauthVerifiedEmail(
   account: { provider?: string; access_token?: string } | null | undefined,
   user: { email?: string | null } | null | undefined,
@@ -25,6 +37,10 @@ export async function oauthVerifiedEmail(
   }
 
   if (account.provider === "github" && account.access_token) {
+    let cache = verifiedCacheByFetch.get(fetchImpl);
+    if (!cache) verifiedCacheByFetch.set(fetchImpl, (cache = new Map()));
+    const cached = cache.get(account.access_token);
+    if (cached && cached.expires > Date.now()) return cached.email;
     try {
       const res = await fetchImpl("https://api.github.com/user/emails", {
         headers: {
@@ -39,7 +55,12 @@ export async function oauthVerifiedEmail(
       const match = emails.find(
         (e) => e.verified && e.email.toLowerCase() === user.email!.toLowerCase(),
       );
-      return match?.email.toLowerCase() ?? null;
+      const verified = match?.email.toLowerCase() ?? null;
+      cache.set(account.access_token, {
+        email: verified,
+        expires: Date.now() + VERIFIED_EMAIL_TTL_MS,
+      });
+      return verified;
     } catch {
       return null; // verification unavailable — deny rather than assume
     }

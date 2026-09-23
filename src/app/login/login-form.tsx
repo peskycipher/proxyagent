@@ -8,6 +8,7 @@ import { signIn } from "next-auth/react";
 const OAUTH_ERRORS: Record<string, string> = {
   OAuthSignin: "Could not start the sign-in provider. Try again.",
   OAuthCallback: "The provider returned an error. Try again.",
+  AccessDenied: "Sign-in was canceled or denied at the provider. If this was a mistake, try again.",
   OAuthAccountNotLinked: "That email is already registered with a different sign-in method.",
   OAuthEmailNotVerified:
     "Sign-in blocked: the email on your provider account isn't verified, so it can't be " +

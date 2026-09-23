@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import { cookies } from "next/headers";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
@@ -36,7 +37,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, account, profile }) {
       const decision = await oauthSignInDecision(account, user, profile);
       if (decision.allow) return true;
-      return "/login?error=OAuthEmailNotVerified";
+      // The deep link survives the deny inside Auth.js's callback-url cookie —
+      // re-attach it so a repaired verification retries into the original
+      // destination instead of falling back to /portal. Path-form only: no
+      // open redirects via absolute URLs or protocol-relative ones.
+      let next: string | undefined;
+      try {
+        const jar = await cookies();
+        const raw =
+          jar.get("__Secure-authjs.callback-url")?.value ??
+          jar.get("authjs.callback-url")?.value;
+        if (raw?.startsWith("/") && !raw.startsWith("//")) next = raw;
+      } catch {
+        // No request context to read cookies from — the deny still redirects,
+        // just without the preserved destination.
+      }
+      const params = new URLSearchParams({ error: "OAuthEmailNotVerified" });
+      if (next) params.set("next", next);
+      return `/login?${params.toString()}`;
     },
     // JWT strategy: stamp the LOCAL user id onto the token. Credentials
     // users already carry their db id; OAuth users are linked or created

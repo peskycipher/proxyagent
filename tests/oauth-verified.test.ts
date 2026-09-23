@@ -40,6 +40,19 @@ describe("oauthVerifiedEmail", () => {
     );
   });
 
+  it("caches per token: a repeat call with the same fetch client costs no second API call", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      okJson([{ email: "me@example.com", verified: true }]),
+    );
+    const account = { provider: "github", access_token: "gho_dup" };
+    const user = { email: "me@example.com" };
+    const first = await oauthVerifiedEmail(account, user, undefined, fetchImpl);
+    const second = await oauthVerifiedEmail(account, user, undefined, fetchImpl);
+    expect(first).toBe("me@example.com");
+    expect(second).toBe(first);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects a GitHub identity whose matching email entry is unverified", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       okJson([{ email: "me@example.com", verified: false }]),

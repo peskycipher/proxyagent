@@ -1,6 +1,5 @@
-import { getDb, newId } from "@/lib/db";
+import { getDb, newId, type DbStmt } from "@/lib/db";
 import { priceUsdCents, secondsForBlock, tierFor } from "@/lib/pricing";
-import { credit } from "@/lib/credits";
 
 export interface PurchaseRow {
   id: string;
@@ -54,9 +53,12 @@ export async function listPurchases(userId: string, limit = 20): Promise<Purchas
  * `underpaidUsdCents` (optional) marks purchases that received less than the
  * block price; nothing is credited for them.
  *
- * Concurrency: the status transition is guarded by `AND status = 'pending'`,
- * so concurrent webhook deliveries can only flip it once; the loser sees
- * 0 changed rows and re-reads the final state.
+ * Concurrency & atomicity: the status flip, balance credit, and ledger row
+ * are ONE batch — D1 batches run in an implicit transaction (local driver
+ * wraps in one too), so a crash mid-confirm leaves the purchase pending and
+ * the webhook retry completes it; the `AND status = 'pending'` guard means
+ * concurrent deliveries flip it exactly once, and the loser sees 0 changed
+ * rows and re-reads the final state.
  */
 export async function confirmPurchase(
   purchaseId: string,
@@ -75,21 +77,30 @@ export async function confirmPurchase(
     receivedUsdCents < purchase.amount_usd_cents - Math.ceil(purchase.amount_usd_cents * 0.02);
   const status = underpaid ? "underpaid" : "confirmed";
 
-  const res = await db.run(
-    "UPDATE purchases SET status = ?, confirmed_at = ?, gateway_ref = ? WHERE id = ? AND status = 'pending'",
-    status,
-    Date.now(),
-    webhookUuid,
-    purchaseId,
-  );
-  if (res.changes === 0) {
+  const stmts: DbStmt[] = [
+    {
+      sql: "UPDATE purchases SET status = ?, confirmed_at = ?, gateway_ref = ? WHERE id = ? AND status = 'pending'",
+      params: [status, Date.now(), webhookUuid, purchaseId],
+    },
+  ];
+  if (status === "confirmed") {
+    stmts.push(
+      {
+        sql: "UPDATE users SET balance_seconds = balance_seconds + ? WHERE id = ?",
+        params: [purchase.seconds, purchase.user_id],
+      },
+      {
+        sql: "INSERT INTO credit_txns (id, user_id, delta_seconds, reason, ref, created_at) VALUES (?,?,?,?,?,?)",
+        params: [newId("txn"), purchase.user_id, purchase.seconds, `purchase:${purchase.id}`, webhookUuid, Date.now()],
+      },
+    );
+  }
+  const results = await db.batch(stmts);
+  if ((results[0]?.changes ?? 0) === 0) {
     // Another delivery confirmed it first.
     const latest = await getPurchase(purchaseId);
     return latest ? { credited: false, userId: latest.user_id, seconds: latest.seconds } : null;
   }
 
-  if (status === "confirmed") {
-    await credit(purchase.user_id, purchase.seconds, `purchase:${purchase.id}`, webhookUuid);
-  }
   return { credited: status === "confirmed", userId: purchase.user_id, seconds: purchase.seconds };
 }

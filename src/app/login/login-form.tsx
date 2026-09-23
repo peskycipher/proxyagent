@@ -9,6 +9,10 @@ const OAUTH_ERRORS: Record<string, string> = {
   OAuthSignin: "Could not start the sign-in provider. Try again.",
   OAuthCallback: "The provider returned an error. Try again.",
   OAuthAccountNotLinked: "That email is already registered with a different sign-in method.",
+  OAuthEmailNotVerified:
+    "Sign-in blocked: the email on your provider account isn't verified, so it can't be " +
+    "linked to an existing account or create one. Verify it with the provider, or sign in " +
+    "with your email and password.",
   Callback: "Sign-in failed. Try again.",
 };
 

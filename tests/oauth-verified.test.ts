@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { oauthVerifiedEmail } from "@/lib/oauth";
+import { oauthVerifiedEmail, oauthSignInDecision, OAuthEmailNotVerifiedError } from "@/lib/oauth";
 
 const okJson = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
 
@@ -71,5 +71,51 @@ describe("oauthVerifiedEmail", () => {
     expect(await oauthVerifiedEmail({ provider: "google" }, { email: null })).toBeNull();
     // GitHub without an access token cannot be verified — deny.
     expect(await oauthVerifiedEmail({ provider: "github" }, { email: "me@example.com" })).toBeNull();
+  });
+});
+
+describe("oauthSignInDecision", () => {
+  it("allows credentials sign-ins without contacting the provider", async () => {
+    const fetchImpl = vi.fn();
+    const decision = await oauthSignInDecision(
+      { provider: "github", type: "credentials" },
+      { id: "usr_abc", email: "a@b.co" },
+      undefined,
+      fetchImpl,
+    );
+    expect(decision).toEqual({ allow: true });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("allows OAuth identities without an email (nothing to link by email)", async () => {
+    expect(await oauthSignInDecision({ provider: "github", type: "oauth" }, { id: "12345" })).toEqual({ allow: true });
+    expect(await oauthSignInDecision({ provider: "github", type: "oauth" }, { id: "12345", email: null })).toEqual({ allow: true });
+  });
+
+  it("allows an OAuth identity whose provider verified the email", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(okJson([{ email: "me@example.com", verified: true }]));
+    expect(
+      await oauthSignInDecision({ provider: "github", type: "oauth", access_token: "t" }, { id: "1", email: "me@example.com" }, undefined, fetchImpl),
+    ).toEqual({ allow: true });
+  });
+
+  it("denies an OAuth identity with an unverified provider email", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(okJson([{ email: "me@example.com", verified: false }]));
+    expect(
+      await oauthSignInDecision({ provider: "github", type: "oauth" }, { id: "1", email: "me@example.com" }, undefined, fetchImpl),
+    ).toEqual({ allow: false, reason: "unverified-email" });
+  });
+
+  it("fails closed for unsupported providers and missing account data", async () => {
+    expect(
+      await oauthSignInDecision({ provider: "twitter", type: "oauth" }, { id: "1", email: "a@b.co" }),
+    ).toEqual({ allow: false, reason: "unverified-email" });
+    expect(await oauthSignInDecision(null, { id: "1", email: "a@b.co" })).toEqual({ allow: true });
+  });
+
+  it("exposes a named error for the jwt-callback backstop", () => {
+    const err = new OAuthEmailNotVerifiedError();
+    expect(err.name).toBe("OAuthEmailNotVerifiedError");
+    expect(err).toBeInstanceOf(Error);
   });
 });

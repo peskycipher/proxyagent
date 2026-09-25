@@ -19,6 +19,7 @@ interface ActivePurchase {
   seconds: number;
   minimumTransactionCoin?: number;
   qrCode?: string | null;
+  coinAmount?: number | null;
 }
 
 interface PastPurchase {
@@ -103,6 +104,7 @@ export default function PortalClient({
       seconds: body.seconds,
       minimumTransactionCoin: body.minimumTransactionCoin,
       qrCode: body.qrCode,
+      coinAmount: body.coinAmount,
     });
   }
 
@@ -201,6 +203,24 @@ export default function PortalClient({
                 <div style={{ wordBreak: "break-all", fontFamily: "monospace", background: "var(--bg)", padding: 10, borderRadius: 8 }}>
                   {active.addressIn}
                 </div>
+                {typeof active.coinAmount === "number" && (
+                  <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="muted">Amount to transfer:</span>
+                    <code style={{ background: "var(--bg)", padding: "6px 10px", borderRadius: 8 }}>
+                      ≈ {active.coinAmount.toLocaleString("en-US", { maximumFractionDigits: 8 })} {coin.toUpperCase()}
+                    </code>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ padding: "2px 10px", fontSize: 13 }}
+                      onClick={() =>
+                        void navigator.clipboard.writeText(String(active.coinAmount))
+                      }
+                    >
+                      Copy
+                    </button>
+                  </div>
+                )}
                 {typeof active.minimumTransactionCoin === "number" && (
                   <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8, background: "var(--bg)", border: "1px solid var(--border)" }}>
                     ⚠️ Minimum transaction: <strong>{active.minimumTransactionCoin} {coin.toUpperCase()}</strong> — payments below

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { acceptedCoins, createCharge, payoutWalletFor, tickerFor } from "@/lib/gateway";
+import { acceptedCoins, convertUsdToCoin, createCharge, payoutWalletFor, tickerFor } from "@/lib/gateway";
 import { createPurchase, attachCharge } from "@/lib/purchases";
 import { tierFor } from "@/lib/pricing";
 import { randomBytes } from "node:crypto";
@@ -61,6 +61,9 @@ export async function POST(req: Request) {
       .then((r) => (r.ok ? (r.json() as { qr_code?: string }) : null))
       .then((b) => b?.qr_code ?? null)
       .catch(() => null);
+    // CryptAPI best practice (ecommerce flow): show the USD price converted to
+    // the selected coin so the user knows how much to transfer. Non-fatal.
+    const coinAmount = await convertUsdToCoin(ticker, purchase.amount_usd_cents / 100);
     return NextResponse.json({
       purchaseId: purchase.id,
       addressIn: charge.addressIn,
@@ -68,6 +71,7 @@ export async function POST(req: Request) {
       seconds: purchase.seconds,
       minimumTransactionCoin: charge.minimumTransactionCoin,
       qrCode: qr,
+      coinAmount,
     });
   } catch (e) {
     return NextResponse.json({ error: `payment gateway error: ${(e as Error).message}` }, { status: 502 });

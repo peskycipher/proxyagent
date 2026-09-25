@@ -34,6 +34,28 @@ export interface Charge {
 }
 
 /**
+ * Convert a USD amount to the coin amount via CryptAPI's convert endpoint
+ * ({ticker}/convert/?value=..&from=USD). Returns null on any failure —
+ * the portal then shows only the USD price. Ticker is the CryptAPI path
+ * form (e.g. "btc", "trc20/usdt").
+ */
+export async function convertUsdToCoin(ticker: string, usd: number): Promise<number | null> {
+  if (!Number.isFinite(usd) || usd <= 0) return null;
+  try {
+    const res = await fetch(
+      `https://api.cryptapi.io/${ticker}/convert/?value=${encodeURIComponent(usd)}&from=USD`,
+      { signal: AbortSignal.timeout(10000) },
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as { value_coin?: number | string };
+    const v = Number(body.value_coin);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Native coins CryptAPI only exposes in network/token form (bare "sol" 404s
  * with "Resource not found" on /create/; "sol/sol" is the valid path).
  */

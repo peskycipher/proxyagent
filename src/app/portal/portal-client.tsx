@@ -62,6 +62,14 @@ export default function PortalClient({
   const [active, setActive] = useState<ActivePurchase | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState<"address" | "amount" | null>(null);
+
+  function copyToClipboard(value: string, which: "address" | "amount") {
+    void navigator.clipboard.writeText(value).then(() => {
+      setCopied(which);
+      setTimeout(() => setCopied((c) => (c === which ? null : c)), 1500);
+    });
+  }
 
   const selectedTier = useMemo(() => tiers.find((t) => t.hours === selectedHours), [tiers, selectedHours]);
 
@@ -221,8 +229,24 @@ export default function PortalClient({
                 />
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ wordBreak: "break-all", fontFamily: "monospace", background: "var(--bg)", padding: 10, borderRadius: 8 }}>
-                  {active.addressIn}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ wordBreak: "break-all", fontFamily: "monospace", background: "var(--bg)", padding: 10, borderRadius: 8, flex: 1 }}>
+                    {active.addressIn}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{
+                      padding: "2px 10px",
+                      fontSize: 13,
+                      flexShrink: 0,
+                      background: copied === "address" ? "var(--border)" : undefined,
+                      color: copied === "address" ? "var(--accent)" : undefined,
+                    }}
+                    onClick={() => copyToClipboard(active.addressIn, "address")}
+                  >
+                    {copied === "address" ? "Copied!" : "Copy"}
+                  </button>
                 </div>
                 {typeof active.coinAmount === "number" && (
                   <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
@@ -233,12 +257,15 @@ export default function PortalClient({
                     <button
                       type="button"
                       className="btn"
-                      style={{ padding: "2px 10px", fontSize: 13 }}
-                      onClick={() =>
-                        void navigator.clipboard.writeText(String(active.coinAmount))
-                      }
+                      style={{
+                        padding: "2px 10px",
+                        fontSize: 13,
+                        background: copied === "amount" ? "var(--border)" : undefined,
+                        color: copied === "amount" ? "var(--accent)" : undefined,
+                      }}
+                      onClick={() => copyToClipboard(String(active.coinAmount), "amount")}
                     >
-                      Copy
+                      {copied === "amount" ? "Copied!" : "Copy"}
                     </button>
                   </div>
                 )}

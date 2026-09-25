@@ -8,7 +8,10 @@ export default function SignupPage() {
   };
   return (
     <Suspense fallback={<main style={{ maxWidth: 380, margin: "100px auto", padding: "0 20px" }}><div className="panel" style={{ padding: 28 }}>Loading…</div></main>}>
-      <SignupForm oauth={oauth} />
+      <SignupForm
+        oauth={oauth}
+        turnstileSiteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ""}
+      />
     </Suspense>
   );
 }

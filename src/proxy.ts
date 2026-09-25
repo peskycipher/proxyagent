@@ -1,9 +1,9 @@
 import NextAuth from "next-auth";
 import { authConfig } from "@/auth.config";
 
-const { auth: middleware } = NextAuth(authConfig);
+const { auth: proxy } = NextAuth(authConfig);
 
-export default middleware((req) => {
+export default proxy((req) => {
   const loggedIn = !!req.auth?.user;
   const p = req.nextUrl.pathname;
   if (!loggedIn) {

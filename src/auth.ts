@@ -6,16 +6,26 @@ import GitHub from "next-auth/providers/github";
 import { authConfig } from "@/auth.config";
 import { getUserByEmail, verifyPassword, upsertUserByEmail } from "@/lib/users";
 import { OAuthEmailNotVerifiedError, oauthSignInDecision, oauthVerifiedEmail } from "@/lib/oauth";
+import { turnstileErrorMessage, verifyTurnstileToken } from "@/lib/turnstile";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [
     Credentials({
-      credentials: { email: {}, password: {} },
+      credentials: { email: {}, password: {}, turnstileToken: {} },
       authorize: async (creds) => {
         const email = typeof creds?.email === "string" ? creds.email : "";
         const password = typeof creds?.password === "string" ? creds.password : "";
         if (!email || !password) return null;
+        // The credentials callback serves both the login page ("login") and
+        // the signup page's auto-login ("signup"). Tokens are single-use at
+        // siteverify, so the single call checks success + hostname + action
+        // against the allowed set.
+        const captcha = await verifyTurnstileToken(
+          typeof creds?.turnstileToken === "string" ? creds.turnstileToken : undefined,
+          ["login", "signup"],
+        );
+        if (!captcha.ok) throw new Error(turnstileErrorMessage(captcha));
         const user = await getUserByEmail(email);
         if (!user || !verifyPassword(password, user.password_hash)) return null;
         return { id: user.id, email: user.email };

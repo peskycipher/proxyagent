@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import GitHubMark from "@/components/github-mark";
+import Turnstile from "@/components/turnstile";
 
 const OAUTH_ERRORS: Record<string, string> = {
   OAuthSignin: "Could not start the sign-in provider. Try again.",
@@ -18,21 +19,39 @@ const OAUTH_ERRORS: Record<string, string> = {
   Callback: "Sign-in failed. Try again.",
 };
 
-export default function LoginForm({ oauth }: { oauth: { google: boolean; github: boolean } }) {
+export default function LoginForm({
+  oauth,
+  turnstileSiteKey,
+}: {
+  oauth: { google: boolean; github: boolean };
+  turnstileSiteKey: string;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const oauthError = OAUTH_ERRORS[params.get("error") ?? ""];
+  const captchaRequired = Boolean(turnstileSiteKey);
+  const captchaOk = !captchaRequired || Boolean(captchaToken);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!captchaOk) {
+      setError("Please complete the captcha.");
+      return;
+    }
     setBusy(true);
     setError("");
-    const res = await signIn("credentials", { email, password, redirect: false });
+    const res = await signIn("credentials", {
+      email,
+      password,
+      ...(captchaToken ? { turnstileToken: captchaToken } : {}),
+      redirect: false,
+    });
     if (res?.error) {
       setError("Invalid email or password");
       setBusy(false);
@@ -71,8 +90,9 @@ export default function LoginForm({ oauth }: { oauth: { google: boolean; github:
         <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
           <input className="input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           <input className="input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <Turnstile siteKey={turnstileSiteKey} action="login" onToken={setCaptchaToken} />
           {error && <div className="error">{error}</div>}
-          <button className="btn btn-primary" disabled={busy} type="submit">{busy ? "Logging in…" : "Log in"}</button>
+          <button className="btn btn-primary" disabled={busy || !captchaOk} type="submit">{busy ? "Logging in…" : "Log in"}</button>
         </form>
         <p className="muted" style={{ marginTop: 16 }}>
           No account? <Link href="/signup">Sign up</Link>

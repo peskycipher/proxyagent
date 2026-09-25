@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { signOut } from "next-auth/react";
 
 interface Message {
   role: "user" | "assistant";
@@ -158,8 +159,7 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
               className="muted"
               onClick={async (e) => {
                 e.preventDefault();
-                await fetch("/api/auth/signout", { method: "POST" });
-                window.location.href = "/";
+                await signOut({ callbackUrl: "/" });
               }}
             >
               Sign out

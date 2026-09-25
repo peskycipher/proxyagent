@@ -132,7 +132,7 @@ export default function PortalClient({
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <a className="btn" href="/chat">Chat</a>
-          <button className="btn" onClick={() => (window.location.href = "/api/auth/signout")}>Sign out</button>
+          <button className="btn" onClick={() => void signOut({ callbackUrl: "/" })}>Sign out</button>
         </div>
       </div>
 

@@ -22,6 +22,9 @@ npm test               # unit tests
 
 Required env: `AUTH_SECRET` (openssl rand -hex 32), `RUNPOD_API_KEY`, `RUNPOD_POD_ID`, `LLAMA_SERVER_URL`, `GATEWAY_WEBHOOK_SECRET`, `BASE_URL`, `CRYPTAPI_WALLETS_<COIN>` per accepted coin (`COIN` id is the lowercase env suffix; network-qualified coins like `CRYPTAPI_WALLETS_TRC20_USDT` map to CryptAPI ticker `trc20/usdt`, and the address must be on that network).
 
+Captcha (Turnstile, opt-in — the login/signup captcha renders only when these are set):
+`NEXT_PUBLIC_TURNSTILE_SITE_KEY` (build-time, public), `TURNSTILE_SECRET` (Worker secret via `wrangler secret put TURNSTILE_SECRET`), and `TURNSTILE_HOSTNAMES` (comma-separated frontend hostnames this deployment serves — production value must not include `localhost`/`127.0.0.1`).
+
 ## Webhook testing locally
 
 CryptAPI must be able to reach your dev machine: run behind a tunnel (e.g. `cloudflared tunnel --url http://localhost:3000`) and set `BASE_URL` to the tunnel URL.

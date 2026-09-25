@@ -33,6 +33,12 @@ export default function Home() {
           Credits decrement with actual usage (per second of model time). Paid in crypto.
         </p>
       </div>
+
+      <p className="muted" style={{ marginTop: 24, fontSize: 14 }}>
+        <Link href="/privacy">Privacy Policy</Link>
+        <span style={{ margin: "0 8px" }}>·</span>
+        <Link href="/terms">Terms of Service</Link>
+      </p>
     </main>
   );
 }

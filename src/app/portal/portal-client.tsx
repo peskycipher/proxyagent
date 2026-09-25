@@ -141,7 +141,7 @@ export default function PortalClient({
           {coins.length > 0 && (
             <div>
               <div className="muted" style={{ marginBottom: 4 }}>Pay with</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", justifyContent: "space-evenly", flexWrap: "wrap", rowGap: 8 }}>
                 {coins.map((c) => {
                   const icon = iconFor(c);
                   const selected = coin === c;
@@ -155,8 +155,8 @@ export default function PortalClient({
                       style={{
                         display: "grid",
                         placeItems: "center",
-                        width: 76,
-                        height: 76,
+                        width: 50,
+                        height: 50,
                         borderRadius: "50%",
                         border: selected ? "2px solid var(--accent)" : "2px solid var(--border)",
                         background: selected ? "var(--bg)" : "transparent",
@@ -165,9 +165,9 @@ export default function PortalClient({
                       }}
                     >
                       {icon ? (
-                        <img src={iconUrl(icon)} alt={coinLabel(c)} width={60} height={60} />
+                        <img src={iconUrl(icon)} alt={coinLabel(c)} width={40} height={40} />
                       ) : (
-                        <span style={{ fontSize: 32, fontWeight: 700 }}>{coinLabel(c).charAt(0)}</span>
+                        <span style={{ fontSize: 21, fontWeight: 700 }}>{coinLabel(c).charAt(0)}</span>
                       )}
                     </button>
                   );

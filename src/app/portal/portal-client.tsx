@@ -161,10 +161,11 @@ export default function PortalClient({
               </button>
             );
           })}
-          {coins.length > 0 && (
-            <div>
-              <div className="muted" style={{ marginBottom: 4 }}>Pay with</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        </div>
+        {coins.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div className="muted" style={{ marginBottom: 4 }}>Pay with</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {coins.map((c) => {
                   const icon = iconFor(c);
                   const selected = coin === c;
@@ -199,12 +200,11 @@ export default function PortalClient({
             </div>
           )}
           {selectedTier && (
-            <button className="btn btn-primary" onClick={buy} disabled={busy || coins.length === 0}>
+            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={buy} disabled={busy || coins.length === 0}>
               {busy ? "Creating…" : `Buy ${selectedHours}h — $${(selectedTier.cents / 100).toFixed(2)} in ${coinLabel(coin)}`}
             </button>
           )}
-          {error && <div className="error">{error}</div>}
-        </div>
+          {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
 
         {active && (
           <div className="panel" style={{ padding: 16, marginTop: 16 }}>

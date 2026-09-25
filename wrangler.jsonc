@@ -16,6 +16,7 @@
     }
   ],
   "vars": {
-    "TURNSTILE_HOSTNAMES": "proxyagent.rent"
+    "TURNSTILE_HOSTNAMES": "proxyagent.rent",
+    "BASE_URL": "https://proxyagent.rent"
   }
 }

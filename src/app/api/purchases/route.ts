@@ -31,7 +31,15 @@ export async function POST(req: Request) {
 
   // Unique callback URL (CryptAPI treats it as the charge id) carrying our
   // secret path segment + invoice id + one-time nonce, echoed back in callbacks.
-  const base = process.env.BASE_URL || "http://localhost:3000";
+  // CryptAPI rejects non-public callback hosts ("Callback URL malformed"), so a
+  // missing/mis-set BASE_URL must fail loudly here rather than 400 downstream.
+  const base = process.env.BASE_URL || "";
+  if (!/^https:\/\//.test(base)) {
+    return NextResponse.json(
+      { error: "gateway misconfigured: BASE_URL must be an https:// public URL" },
+      { status: 500 }
+    );
+  }
   const secret = process.env.GATEWAY_WEBHOOK_SECRET;
   if (!secret) return NextResponse.json({ error: "gateway not configured" }, { status: 500 });
   const callbackUrl = `${base}/api/webhooks/gateway/${secret}?invoice=${encodeURIComponent(purchase.id)}&nonce=${randomBytes(16).toString("hex")}`;

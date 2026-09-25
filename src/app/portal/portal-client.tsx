@@ -130,16 +130,37 @@ export default function PortalClient({
 
       <div className="panel" style={{ padding: 20, marginBottom: 20 }}>
         <h2 style={{ marginTop: 0 }}>Buy time credits</h2>
-        <div style={{ display: "grid", gap: 10 }}>
-          {tiers.map((t) => (
-            <label key={t.hours} style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
-              <input type="radio" name="tier" checked={selectedHours === t.hours} onChange={() => setSelectedHours(t.hours)} />
-              <span style={{ flex: 1 }}>
-                {t.hours}h {t.discount > 0 && <span className="muted">({Math.round((1 - t.discount) * 100)}% of base)</span>}
-              </span>
-              <span style={{ fontWeight: 600 }}>${(t.cents / 100).toFixed(2)}</span>
-            </label>
-          ))}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
+          {tiers.map((t) => {
+            const selected = selectedHours === t.hours;
+            return (
+              <button
+                key={t.hours}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => setSelectedHours(t.hours)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  background: "var(--bg)",
+                  border: selected ? "2px solid var(--accent)" : "2px solid var(--border)",
+                  cursor: "pointer",
+                  font: "inherit",
+                  color: "inherit",
+                  textAlign: "left",
+                }}
+              >
+                <span>
+                  {t.hours}h {t.discount > 0 && <span className="muted">({Math.round((1 - t.discount) * 100)}% of base)</span>}
+                </span>
+                <span style={{ fontWeight: 600 }}>${(t.cents / 100).toFixed(2)}</span>
+              </button>
+            );
+          })}
           {coins.length > 0 && (
             <div>
               <div className="muted" style={{ marginBottom: 4 }}>Pay with</div>

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import GitHubMark from "@/components/github-mark";
+import GoogleMark from "@/components/google-mark";
 import Turnstile from "@/components/turnstile";
 
 const OAUTH_ERRORS: Record<string, string> = {
@@ -69,7 +70,13 @@ export default function LoginForm({
         {(oauth.google || oauth.github) && (
           <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
             {oauth.google && (
-              <button className="btn" type="button" onClick={() => signIn("google", { callbackUrl: params.get("next") || "/portal" })}>
+              <button
+                className="btn"
+                type="button"
+                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                onClick={() => signIn("google", { callbackUrl: params.get("next") || "/portal" })}
+              >
+                <GoogleMark />
                 Continue with Google
               </button>
             )}

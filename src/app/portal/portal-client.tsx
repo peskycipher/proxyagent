@@ -3,34 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import btcIcon from "cryptocurrency-icons/svg/color/btc.svg";
-import zecIcon from "cryptocurrency-icons/svg/color/zec.svg";
-import usdtIcon from "cryptocurrency-icons/svg/color/usdt.svg";
-import ltcIcon from "cryptocurrency-icons/svg/color/ltc.svg";
-import ethIcon from "cryptocurrency-icons/svg/color/eth.svg";
-import dogeIcon from "cryptocurrency-icons/svg/color/doge.svg";
-import xmrIcon from "cryptocurrency-icons/svg/color/xmr.svg";
-import usdtTrc20Icon from "./icons/usdt-trc20.svg"; // TRON-red USDT for the TRC-20 network
-import { iconUrl, type IconAsset } from "@/lib/icon-url";
-
-/**
- * Icon map keyed by base ticker (last path segment of the CryptAPI ticker);
- * network-qualified overrides (full coin id) win over the base ticker.
- */
-const ICONS: Record<string, IconAsset> = {
-  btc: btcIcon,
-  zec: zecIcon,
-  usdt: usdtIcon,
-  trc20_usdt: usdtTrc20Icon,
-  ltc: ltcIcon,
-  eth: ethIcon,
-  doge: dogeIcon,
-  xmr: xmrIcon,
-};
-
-function iconFor(coin: string): IconAsset | undefined {
-  return ICONS[coin] ?? ICONS[coin.split("_").pop() ?? ""];
-}
+import { iconFor } from "@/lib/coin-icons";
+import { iconUrl } from "@/lib/icon-url";
 
 interface Tier {
   hours: number;

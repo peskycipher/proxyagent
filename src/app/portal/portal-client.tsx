@@ -155,8 +155,8 @@ export default function PortalClient({
                       style={{
                         display: "grid",
                         placeItems: "center",
-                        width: 44,
-                        height: 44,
+                        width: 76,
+                        height: 76,
                         borderRadius: "50%",
                         border: selected ? "2px solid var(--accent)" : "2px solid var(--border)",
                         background: selected ? "var(--bg)" : "transparent",
@@ -165,9 +165,9 @@ export default function PortalClient({
                       }}
                     >
                       {icon ? (
-                        <img src={iconUrl(icon)} alt={coinLabel(c)} width={30} height={30} />
+                        <img src={iconUrl(icon)} alt={coinLabel(c)} width={60} height={60} />
                       ) : (
-                        <span style={{ fontSize: 16, fontWeight: 700 }}>{coinLabel(c).charAt(0)}</span>
+                        <span style={{ fontSize: 32, fontWeight: 700 }}>{coinLabel(c).charAt(0)}</span>
                       )}
                     </button>
                   );

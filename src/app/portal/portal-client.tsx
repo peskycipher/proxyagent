@@ -200,7 +200,7 @@ export default function PortalClient({
             </div>
           )}
           {selectedTier && (
-            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={buy} disabled={busy || coins.length === 0}>
+            <button className="btn btn-primary" style={{ marginTop: 16, width: "100%" }} onClick={buy} disabled={busy || coins.length === 0}>
               {busy ? "Creating…" : `Buy ${selectedHours}h — $${(selectedTier.cents / 100).toFixed(2)} in ${coinLabel(coin)}`}
             </button>
           )}

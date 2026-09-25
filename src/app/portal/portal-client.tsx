@@ -17,6 +17,8 @@ interface ActivePurchase {
   addressIn: string;
   amountUsdCents: number;
   seconds: number;
+  minimumTransactionCoin?: number;
+  qrCode?: string | null;
 }
 
 interface PastPurchase {
@@ -94,7 +96,14 @@ export default function PortalClient({
       setError(body.error ?? "purchase failed");
       return;
     }
-    setActive({ purchaseId: body.purchaseId, addressIn: body.addressIn, amountUsdCents: body.amountUsdCents, seconds: body.seconds });
+    setActive({
+      purchaseId: body.purchaseId,
+      addressIn: body.addressIn,
+      amountUsdCents: body.amountUsdCents,
+      seconds: body.seconds,
+      minimumTransactionCoin: body.minimumTransactionCoin,
+      qrCode: body.qrCode,
+    });
   }
 
   return (
@@ -177,8 +186,28 @@ export default function PortalClient({
         {active && (
           <div className="panel" style={{ padding: 16, marginTop: 16 }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>Send payment to:</div>
-            <div style={{ wordBreak: "break-all", fontFamily: "monospace", background: "var(--bg)", padding: 10, borderRadius: 8 }}>
-              {active.addressIn}
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+              {active.qrCode && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`data:image/png;base64,${active.qrCode}`}
+                  alt="Payment QR code"
+                  width={150}
+                  height={150}
+                  style={{ borderRadius: 8, border: "1px solid var(--border)" }}
+                />
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ wordBreak: "break-all", fontFamily: "monospace", background: "var(--bg)", padding: 10, borderRadius: 8 }}>
+                  {active.addressIn}
+                </div>
+                {typeof active.minimumTransactionCoin === "number" && (
+                  <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8, background: "var(--bg)", border: "1px solid var(--border)" }}>
+                    ⚠️ Minimum transaction: <strong>{active.minimumTransactionCoin} {coin.toUpperCase()}</strong> — payments below
+                    this amount are <strong>not credited and the funds are lost</strong>.
+                  </div>
+                )}
+              </div>
             </div>
             <div className="muted" style={{ marginTop: 8 }}>
               Price: ${(active.amountUsdCents / 100).toFixed(2)} for {fmt(active.seconds)}. Credits appear automatically

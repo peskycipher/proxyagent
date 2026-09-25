@@ -62,6 +62,13 @@ function openLocalDb(): SqliteDb {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
+  for (const sql of MIGRATIONS) {
+    try {
+      db.exec(sql);
+    } catch {
+      // duplicate column / already applied
+    }
+  }
   return db;
 }
 
@@ -119,6 +126,7 @@ function ensureD1Schema(d1: D1Like): Promise<unknown> {
         .filter(Boolean)
         .map((sql) => d1.prepare(sql)),
     )
+    .then(() => applyD1Migrations(d1))
     .catch((e) => {
       d1SchemaReady = null;
       throw e;
@@ -126,9 +134,25 @@ function ensureD1Schema(d1: D1Like): Promise<unknown> {
   return d1SchemaReady;
 }
 
+/**
+ * Column additions applied idempotently on top of SCHEMA for databases created
+ * before the column existed. Duplicate-column errors are tolerated (the column
+ * already exists from SCHEMA on fresh databases).
+ */
+const MIGRATIONS = ["ALTER TABLE purchases ADD COLUMN nonce TEXT"];
+
+function applyD1Migrations(d1: D1Like): Promise<unknown> {
+  return Promise.all(
+    MIGRATIONS.map((sql) => d1.prepare(sql).run().catch(() => undefined)),
+  );
+}
+
 async function getD1(): Promise<D1Like | null> {
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    // SAFETY: getCloudflareContext returns the Worker runtime context whose env
+    // shape is only known at runtime; we only probe for an optional DB binding
+    // and fall back to the local driver when absent.
     const d1 = (getCloudflareContext() as unknown as { env: { DB?: D1Like } }).env?.DB;
     return d1 ?? null;
   } catch {
@@ -173,7 +197,8 @@ CREATE TABLE IF NOT EXISTS purchases (
   amount_usd_cents INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','confirmed','expired','underpaid')),
   created_at INTEGER NOT NULL,
-  confirmed_at INTEGER
+  confirmed_at INTEGER,
+  nonce TEXT
 );
 
 CREATE TABLE IF NOT EXISTS credit_txns (

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { acceptedCoins, createCharge, payoutWalletFor } from "@/lib/gateway";
+import { acceptedCoins, createCharge, payoutWalletFor, tickerFor } from "@/lib/gateway";
 import { createPurchase, attachCharge } from "@/lib/purchases";
 import { tierFor } from "@/lib/pricing";
 import { randomBytes } from "node:crypto";
@@ -27,7 +27,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "coin not supported" }, { status: 400 });
   }
 
-  const purchase = await createPurchase(session.user.id, hours, coin);
+  // CryptAPI best practice: generate the unguessable nonce before creating the
+  // purchase, store it with the order, and embed it in the callback URL — the
+  // webhook handler rejects callbacks whose nonce doesn't match what we stored.
+  const nonce = randomBytes(16).toString("hex");
+  const purchase = await createPurchase(session.user.id, hours, coin, nonce);
 
   // Unique callback URL (CryptAPI treats it as the charge id) carrying our
   // secret path segment + invoice id + one-time nonce, echoed back in callbacks.
@@ -42,17 +46,28 @@ export async function POST(req: Request) {
   }
   const secret = process.env.GATEWAY_WEBHOOK_SECRET;
   if (!secret) return NextResponse.json({ error: "gateway not configured" }, { status: 500 });
-  const callbackUrl = `${base}/api/webhooks/gateway/${secret}?invoice=${encodeURIComponent(purchase.id)}&nonce=${randomBytes(16).toString("hex")}`;
+  const callbackUrl = `${base}/api/webhooks/gateway/${secret}?invoice=${encodeURIComponent(purchase.id)}&nonce=${nonce}`;
 
   try {
     const charge = await createCharge({ coin, payoutAddress: payout, callbackUrl });
     await attachCharge(purchase.id, charge.addressIn);
+    // CryptAPI best practice: show a scannable QR of the deposit address.
+    // Non-fatal — if the QR endpoint hiccups the address is still displayed.
+    const ticker = tickerFor(coin).split("/").map(encodeURIComponent).join("/");
+    const qr = await fetch(
+      `https://api.cryptapi.io/${ticker}/qrcode/?address=${encodeURIComponent(charge.addressIn)}&size=300`,
+      { signal: AbortSignal.timeout(10000) },
+    )
+      .then((r) => (r.ok ? (r.json() as { qr_code?: string }) : null))
+      .then((b) => b?.qr_code ?? null)
+      .catch(() => null);
     return NextResponse.json({
       purchaseId: purchase.id,
       addressIn: charge.addressIn,
       amountUsdCents: purchase.amount_usd_cents,
       seconds: purchase.seconds,
       minimumTransactionCoin: charge.minimumTransactionCoin,
+      qrCode: qr,
     });
   } catch (e) {
     return NextResponse.json({ error: `payment gateway error: ${(e as Error).message}` }, { status: 502 });

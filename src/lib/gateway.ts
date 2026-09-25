@@ -47,10 +47,18 @@ export async function createCharge(params: CreateChargeParams): Promise<Charge> 
   const { coin, payoutAddress, callbackUrl, confirmations = 1 } = params;
   if (!payoutAddress) throw new Error(`no payout wallet configured for coin ${coin}`);
   const ticker = tickerFor(coin).split("/").map(encodeURIComponent).join("/");
-  const url = new URL(`https://api.cryptapi.io/${ticker}/create/`);
+  let url: URL;
+  try {
+    url = new URL(`https://api.cryptapi.io/${ticker}/create/`);
+  } catch {
+    throw new Error(`invalid gateway ticker for coin ${coin}`);
+  }
   url.searchParams.set("callback", callbackUrl);
   url.searchParams.set("address", payoutAddress);
   url.searchParams.set("pending", "1");
+  // CryptAPI best practice: request converted values so confirmed webhooks carry
+  // value_forwarded_coin_convert (USD) — used as the underpayment guard.
+  url.searchParams.set("convert", "1");
   url.searchParams.set("confirmations", String(confirmations));
   const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
   if (!res.ok) {

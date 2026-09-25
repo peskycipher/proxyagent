@@ -14,7 +14,12 @@ async function handle(req: Request, { params }: { params: Promise<{ secret: stri
     return new Response("not found", { status: 404 });
   }
 
-  const url = new URL(req.url);
+  let url: URL;
+  try {
+    url = new URL(req.url);
+  } catch {
+    return new Response("bad request", { status: 400 });
+  }
   const invoiceId = url.searchParams.get("invoice");
   if (!invoiceId) return new Response("missing invoice", { status: 400 });
 
@@ -37,6 +42,15 @@ async function handle(req: Request, { params }: { params: Promise<{ secret: stri
 
   const purchase = await getPurchase(invoiceId);
   if (!purchase) return new Response("unknown invoice", { status: 400 });
+
+  // CryptAPI best practice: reject callbacks whose nonce doesn't match the
+  // value stored at purchase creation (defense in depth on top of the
+  // signature check). Legacy purchases predating the nonce column pass.
+  const nonce = url.searchParams.get("nonce");
+  if (purchase.nonce && nonce !== purchase.nonce) {
+    console.error("webhook nonce mismatch", { invoiceId });
+    return new Response("forbidden", { status: 403 });
+  }
 
   const pending = url.searchParams.get("pending");
   const uuid = url.searchParams.get("uuid") ?? "";

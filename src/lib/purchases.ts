@@ -12,9 +12,15 @@ export interface PurchaseRow {
   created_at: number;
   confirmed_at: number | null;
   gateway_ref: string | null;
+  nonce: string | null;
 }
 
-export async function createPurchase(userId: string, hours: number, coin: string): Promise<PurchaseRow> {
+export async function createPurchase(
+  userId: string,
+  hours: number,
+  coin: string,
+  nonce?: string,
+): Promise<PurchaseRow> {
   tierFor(hours); // throws for unknown block sizes
   const row: PurchaseRow = {
     id: newId("pur"),
@@ -27,10 +33,11 @@ export async function createPurchase(userId: string, hours: number, coin: string
     created_at: Date.now(),
     confirmed_at: null,
     gateway_ref: null,
+    nonce: nonce ?? null,
   };
   await (await getDb()).run(
-    "INSERT INTO purchases (id, user_id, coin, address_in, seconds, amount_usd_cents, status, created_at) VALUES (?,?,?,?,?,?,?,?)",
-    row.id, row.user_id, row.coin, null, row.seconds, row.amount_usd_cents, "pending", row.created_at,
+    "INSERT INTO purchases (id, user_id, coin, address_in, seconds, amount_usd_cents, status, created_at, nonce) VALUES (?,?,?,?,?,?,?,?,?)",
+    row.id, row.user_id, row.coin, null, row.seconds, row.amount_usd_cents, "pending", row.created_at, row.nonce,
   );
   return row;
 }

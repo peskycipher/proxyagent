@@ -55,6 +55,14 @@ describe("purchases", () => {
     expect(p.status).toBe("pending");
   });
 
+  it("stores the webhook nonce with the purchase", async () => {
+    const { createUser, createPurchase, getPurchase } = await fresh();
+    const uid = await createUser("u1b@example.com", "password123");
+    const p = await createPurchase(uid, 1, "btc", "nonce123");
+    const stored = await getPurchase(p.id);
+    expect(stored?.nonce).toBe("nonce123");
+  });
+
   it("confirmPurchase is idempotent and credits exactly once", async () => {
     const { createUser, createPurchase, confirmPurchase, balanceSeconds, txnsFor } = await fresh();
     const uid = await createUser("u2@example.com", "password123");

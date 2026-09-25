@@ -209,17 +209,19 @@ export default function PortalClient({
         {active && (
           <div className="panel" style={{ padding: 16, marginTop: 16 }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>Send payment to:</div>
-            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-              {active.qrCode && (
-                // eslint-disable-next-line @next/next/no-img-element
+            {active.qrCode && (
+              <div style={{ display: "grid", placeItems: "center", marginBottom: 12 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`data:image/png;base64,${active.qrCode}`}
                   alt="Payment QR code"
-                  width={150}
-                  height={150}
+                  width={240}
+                  height={240}
                   style={{ borderRadius: 8, border: "1px solid var(--border)" }}
                 />
-              )}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ wordBreak: "break-all", fontFamily: "monospace", background: "var(--bg)", padding: 10, borderRadius: 8 }}>
                   {active.addressIn}

@@ -21,6 +21,10 @@ describe("coin id -> CryptAPI ticker mapping", () => {
     expect(gateway.tickerFor("zec")).toBe("zec");
   });
 
+  it("maps Solana to its network/token form (bare sol 404s on /create/)", () => {
+    expect(gateway.tickerFor("sol")).toBe("sol/sol");
+  });
+
   it("accepts and resolves payout wallets for network-qualified coins", () => {
     expect(gateway.acceptedCoins().sort()).toEqual(["btc", "trc20_usdt"]);
     expect(gateway.payoutWalletFor("trc20_usdt")).toBe("TXtest");

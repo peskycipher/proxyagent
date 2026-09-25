@@ -34,10 +34,19 @@ export interface Charge {
 }
 
 /**
+ * Native coins CryptAPI only exposes in network/token form (bare "sol" 404s
+ * with "Resource not found" on /create/; "sol/sol" is the valid path).
+ */
+const NATIVE_TICKER_PATHS: Record<string, string> = {
+  sol: "sol/sol",
+};
+
+/**
  * Coin id -> CryptAPI ticker: the last underscore becomes a path segment, so
  * "trc20_usdt" -> "trc20/usdt" while plain coins ("btc", "zec") pass through.
  */
 export function tickerFor(coin: string): string {
+  if (NATIVE_TICKER_PATHS[coin]) return NATIVE_TICKER_PATHS[coin];
   const i = coin.lastIndexOf("_");
   return i === -1 ? coin : `${coin.slice(0, i)}/${coin.slice(i + 1)}`;
 }

@@ -205,6 +205,8 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
             <textarea
               className="input"
               rows={1}
+              name="message"
+              id="chat-input"
               style={{ resize: "none", maxHeight: 160 }}
               placeholder={streaming ? "Streaming…" : "Message…"}
               value={input}
@@ -212,6 +214,7 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
+                  // SAFETY: send() only calls e.preventDefault() on the parameter, which KeyboardEvent provides — no React event type is relied on beyond preventDefault().
                   void send(e as unknown as React.FormEvent);
                 }
               }}

@@ -95,8 +95,8 @@ export default function LoginForm({
           </div>
         )}
         <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
-          <input className="input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <input className="input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <input className="input" type="email" placeholder="Email" name="email" id="login-email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input className="input" type="password" placeholder="Password" name="password" id="login-password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           <Turnstile siteKey={turnstileSiteKey} action="login" onToken={setCaptchaToken} />
           {error && <div className="error">{error}</div>}
           <button className="btn btn-primary" disabled={busy || !captchaOk} type="submit">{busy ? "Logging in…" : "Log in"}</button>

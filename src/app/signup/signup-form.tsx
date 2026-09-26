@@ -129,8 +129,8 @@ export default function SignupForm({
           </div>
         )}
         <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
-          <input className="input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <input className="input" type="password" placeholder="Password (min 8 chars)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+          <input className="input" type="email" placeholder="Email" name="email" id="signup-email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input className="input" type="password" placeholder="Password (min 8 chars)" name="password" id="signup-password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
           <Turnstile
             siteKey={turnstileSiteKey}
             action="signup"

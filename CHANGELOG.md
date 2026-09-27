@@ -1,0 +1,72 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- **Chat**
+  - Delete chat threads from the sidebar: hover trash icon (nerd-fonts `cod-trash` SVG) with confirm dialog.
+  - `DELETE /api/chats/[id]` removes the chat and its messages atomically, owner-checked.
+  - Deletion is disabled while a stream is in flight to avoid racing its writes.
+
+## [0.1.0] — 2026-09-27
+
+Initial release: a ChatGPT-style proxy-agent web app on Next.js 16, deployed to
+Cloudflare Workers (OpenNext), with crypto-denominated pay-as-you-go billing and
+RunPod-backed model serving.
+
+### Added
+
+- **Auth**
+  - next-auth v5 credentials auth (scrypt password hashing) with edge middleware route protection.
+  - OAuth SSO (GitHub, Google) with provider logos on the login/signup buttons.
+  - Verified-email enforcement: unverified OAuth emails are denied with a distinct user-visible error.
+  - OAuth account linking gated on provider-verified emails.
+  - Cloudflare Turnstile captcha on login and signup; middleware migrated to proxy-based execution.
+
+- **Billing & payments**
+  - CryptAPI payment gateway client with purchase lifecycle and idempotent confirmation, signature-verified webhooks (POST).
+  - Pricing tiers 12/24/72/120 h at $1.59/h with tier discounts.
+  - Atomic credits service: debit and purchase confirmation are atomic under D1, with a gross-underpayment guard and a minimum-amount check.
+  - Portal payment panel: crypto coin picker with SVG icons and selected-state ring, Tron-red TRC-20 USDT, converted-coin amount display, deposit address with copy button ("Copied!" feedback) and side-by-side QR code.
+  - `/me` endpoint.
+
+- **Model serving & chat**
+  - RunPod REST v2 client with pod warmup and idle auto-stop; handles `ERROR`/`EXITED` pod transitions.
+  - Metered SSE chat proxy: debit on stream end, pod warmup events surfaced to the client.
+  - Distributed per-user streaming lock (D1 TTL row + heartbeat) replacing the per-isolate in-memory set.
+  - Billing starts at model request; pod warmup is free for users.
+
+- **Observability**
+  - Structured logger with pluggable sink; route lock, stream, webhook and pod logs route through it.
+  - Webhook alert sink (`ALERT_WEBHOOK_URL`) with rate cap, wired via Next.js instrumentation.
+
+- **UI**
+  - Full UI: marketing pages, auth pages, portal with crypto purchase flow, ChatGPT-style chat.
+  - Responsive buy panel (tier button grid, full-width buy button, vertically stacked layout).
+  - Form accessibility: `id`/`name` + `autocomplete` on login, signup and chat fields.
+
+- **Legal & docs**
+  - NSW-tailored privacy policy and terms.
+  - Project documentation under `docs/`.
+
+### Fixed
+
+- Gateway callback URL malformed — `BASE_URL` moved to wrangler vars (`https://proxyagent.rent`).
+- Network-qualified CryptAPI tickers (`trc20_usdt` → `trc20/usdt`) and surfaced gateway error bodies; SOL mapped to `sol/sol` token path.
+- RunPod v2 client uses the `status` field (verified against the live API).
+- OAuth review follow-ups: `/user/emails` dedupe, `next` param preserved on deny, `AccessDenied` message handling.
+- Solana SVG icon on the portal; icon coverage extracted into a testable module.
+
+### Technical
+
+- Dual-driver database design: Cloudflare D1 in production, better-sqlite3 locally.
+- SQLite schema with users, credits and purchase tables; real D1 `database_id` configured.
+
+[Unreleased]: https://github.com/peskycipher/proxyagent/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/peskycipher/proxyagent/releases/tag/v0.1.0

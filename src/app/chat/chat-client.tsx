@@ -58,6 +58,22 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
     setError("");
   }
 
+  async function deleteChat(id: string) {
+    // Avoid racing an in-flight stream that still writes messages to this chat.
+    if (streaming || !window.confirm("Delete this chat? This cannot be undone.")) return;
+    const res = await fetch(`/api/chats/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setChats((c) => c.filter((x) => x.id !== id));
+      if (chatId === id) {
+        setChatId(null);
+        setMessages([]);
+        setStatus(null);
+      }
+    } else {
+      setError("failed to delete chat");
+    }
+  }
+
   async function send(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
@@ -134,10 +150,33 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
           {chats.map((c) => (
             <div
               key={c.id}
+              className="chat-row"
               onClick={() => openChat(c.id)}
-              style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", background: chatId === c.id ? "#2a2a2a" : "transparent", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", background: chatId === c.id ? "#2a2a2a" : "transparent", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}
             >
-              {c.title}
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</span>
+              <button
+                type="button"
+                className="chat-row-del"
+                title="Delete chat"
+                aria-label={`Delete chat ${c.title}`}
+                disabled={streaming}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void deleteChat(c.id);
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                  fill="currentColor"
+                >
+                  {/* nerd-fonts symbol: cod-trash (ea81) — SVG asset: public/icons/nf-cod-trash.svg */}
+                  <path d="M14 2H10C10 0.897 9.103 0 8 0C6.897 0 6 0.897 6 2H2C1.724 2 1.5 2.224 1.5 2.5C1.5 2.776 1.724 3 2 3H2.54L3.349 12.708C3.456 13.994 4.55 15 5.84 15H10.159C11.449 15 12.543 13.993 12.65 12.708L13.459 3H13.999C14.275 3 14.499 2.776 14.499 2.5C14.499 2.224 14.275 2 13.999 2H14ZM8 1C8.551 1 9 1.449 9 2H7C7 1.449 7.449 1 8 1ZM11.655 12.625C11.591 13.396 10.934 14 10.16 14H5.841C5.067 14 4.41 13.396 4.346 12.625L3.544 3H12.458L11.656 12.625H11.655ZM7 5.5V11.5C7 11.776 6.776 12 6.5 12C6.224 12 6 11.776 6 11.5V5.5C6 5.224 6.224 5 6.5 5C6.776 5 7 5.224 7 5.5ZM10 5.5V11.5C10 11.776 9.776 12 9.5 12C9.224 12 9 11.776 9 11.5V5.5C9 5.224 9.224 5 9.5 5C9.776 5 10 5.224 10 5.5Z" />
+                </svg>
+              </button>
             </div>
           ))}
         </nav>

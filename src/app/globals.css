@@ -60,4 +60,19 @@ input, textarea { font: inherit; }
 .input:focus { outline: 1px solid #10a377; }
 
 .error { color: var(--danger); font-size: 13px; }
+
+.chat-row-del {
+  visibility: hidden;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.chat-row-del:hover { color: var(--danger); }
+.chat-row-del:disabled { cursor: not-allowed; }
+.chat-row:hover .chat-row-del { visibility: visible; }
 .muted { color: var(--muted); font-size: 13px; }

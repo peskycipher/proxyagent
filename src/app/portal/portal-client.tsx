@@ -202,24 +202,7 @@ export default function PortalClient({
       </div>
 
       <div className="panel" style={{ padding: 20, marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-          <h2 style={{ margin: 0 }}>Buy time credits</h2>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <label className="muted" htmlFor="currency-select">Currency</label>
-            <select
-              id="currency-select"
-              className="input"
-              style={{ width: "auto" }}
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              aria-label="Display currency for prices"
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>{c.code}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+        <h2 style={{ margin: 0, marginBottom: 12 }}>Buy time credits</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
           {tiers.map((t) => {
             const selected = selectedHours === t.hours;
@@ -252,6 +235,22 @@ export default function PortalClient({
             );
           })}
         </div>
+        {CURRENCIES.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div className="muted" style={{ marginBottom: 4 }}>Currency</div>
+            <select
+              id="currency-select"
+              className="input"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              aria-label="Display currency for prices"
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c.code} value={c.code}>{c.code}</option>
+              ))}
+            </select>
+          </div>
+        )}
         {coins.length > 0 && (
           <div style={{ marginTop: 16 }}>
             <div className="muted" style={{ marginBottom: 4 }}>Pay with</div>
@@ -331,31 +330,36 @@ export default function PortalClient({
                   </button>
                 </div>
                 {typeof active.coinAmount === "number" && (
-                  <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "180px 1fr", gap: 8, alignItems: "center" }}>
                     <span className="muted">Amount to transfer:</span>
-                    <code style={{ background: "var(--bg)", padding: "6px 10px", borderRadius: 8 }}>
-                      ≈ {active.coinAmount.toLocaleString("en-US", { maximumFractionDigits: 8 })} {coin.toUpperCase()}
-                    </code>
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{
-                        padding: "2px 10px",
-                        fontSize: 13,
-                        background: copied === "amount" ? "var(--border)" : undefined,
-                        color: copied === "amount" ? "var(--accent)" : undefined,
-                      }}
-                      onClick={() => copyToClipboard(String(active.coinAmount), "amount")}
-                    >
-                      {copied === "amount" ? "Copied!" : "Copy"}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <code style={{ background: "var(--bg)", padding: "6px 10px", borderRadius: 8 }}>
+                        ≈ {active.coinAmount.toLocaleString("en-US", { maximumFractionDigits: 8 })} {coin.toUpperCase()}
+                      </code>
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{
+                          padding: "2px 10px",
+                          fontSize: 13,
+                          background: copied === "amount" ? "var(--border)" : undefined,
+                          color: copied === "amount" ? "var(--accent)" : undefined,
+                        }}
+                        onClick={() => copyToClipboard(String(active.coinAmount), "amount")}
+                      >
+                        {copied === "amount" ? "Copied!" : "Copy"}
                       </button>
                     </div>
-                  )}
-                  {/* Locked equivalent: the transaction's amount in the selected
-                      display currency. Read-only by design — the coin amount is
-                      what the customer transfers; this is its fiat value. */}
-                  <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                    <span className="muted">Equivalent ({currency}):</span>
+                  </div>
+                )}
+                {/* Locked equivalent: the transaction's amount in the selected
+                    display currency. Read-only by design — the coin amount is
+                    what the customer transfers; this is its fiat value. Shares
+                    the 180px label column with the row above, so both amount
+                    fields start at the same left edge. */}
+                <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "180px 1fr", gap: 8, alignItems: "center" }}>
+                  <span className="muted">Equivalent ({currency}):</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <input
                       className="input"
                       type="text"
@@ -372,6 +376,7 @@ export default function PortalClient({
                       <path d="M5 6V4.5C5 3.11929 6.11929 2 7.5 2H8.5C9.88071 2 11 3.11929 11 4.5V6H12C12.5523 6 13 6.44772 13 7V12C13 12.5523 12.5523 13 12 13H4C3.44772 13 3 12.5523 3 12V7C3 6.44772 3.44772 6 4 6H5ZM7.5 3C6.67157 3 6 3.67157 6 4.5V6H10V4.5C10 3.67157 9.32843 3 8.5 3H7.5ZM4 7V12H12V7H4ZM8 9C8.55228 9 9 9.44771 9 10C9 10.5523 8.55228 11 8 11C7.44772 11 7 10.5523 7 10C7 9.44771 7.44772 9 8 9Z" />
                     </svg>
                   </div>
+                </div>
                 {typeof active.minimumTransactionCoin === "number" && (
                   <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8, background: "var(--bg)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
                     {/* nerd-fonts symbol: cod-warning — SVG asset: public/icons/nf-cod-warning.svg */}

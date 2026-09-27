@@ -1,7 +1,7 @@
 // Pricing for prepaid time-credit blocks.
-// Base rate = 2x the Runpod pod cost ($0.53/h), i.e. $1.06/h.
+// Base rate = 3x the Runpod pod cost ($0.53/h), i.e. $1.59/h.
 
-export const PRICE_PER_HOUR_USD = 1.06;
+export const PRICE_PER_HOUR_USD = 1.59;
 
 export interface Tier {
   hours: number;
@@ -9,10 +9,10 @@ export interface Tier {
 }
 
 export const TIERS: readonly Tier[] = [
-  { hours: 1, discount: 0 },
-  { hours: 3, discount: 0.05 },
-  { hours: 6, discount: 0.1 },
-  { hours: 12, discount: 0.15 },
+  { hours: 12, discount: 0 },
+  { hours: 24, discount: 0.05 },
+  { hours: 72, discount: 0.1 },
+  { hours: 120, discount: 0.15 },
 ];
 
 function tierFor(hours: number): Tier {
@@ -26,7 +26,7 @@ function tierFor(hours: number): Tier {
 /** Price of a block in whole USD cents (rounded half-up, no float drift). */
 export function priceUsdCents(hours: number): number {
   const tier = tierFor(hours);
-  // Use exact integer math: 1.06 USD = 106 cents.
+  // Use exact integer math: 1.59 USD = 159 cents.
   const baseCents = Math.round(PRICE_PER_HOUR_USD * 100) * hours;
   const discountBp = Math.round(tier.discount * 10000); // basis points
   const net = baseCents * (10000 - discountBp);

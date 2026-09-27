@@ -49,16 +49,16 @@ describe("purchases", () => {
   it("creates a purchase with tier price and seconds", async () => {
     const { createUser, createPurchase } = await fresh();
     const uid = await createUser("u1@example.com", "password123");
-    const p = await createPurchase(uid, 3, "btc");
-    expect(p.amount_usd_cents).toBe(302);
-    expect(p.seconds).toBe(10800);
+    const p = await createPurchase(uid, 24, "btc");
+    expect(p.amount_usd_cents).toBe(3625);
+    expect(p.seconds).toBe(86400);
     expect(p.status).toBe("pending");
   });
 
   it("stores the webhook nonce with the purchase", async () => {
     const { createUser, createPurchase, getPurchase } = await fresh();
     const uid = await createUser("u1b@example.com", "password123");
-    const p = await createPurchase(uid, 1, "btc", "nonce123");
+    const p = await createPurchase(uid, 12, "btc", "nonce123");
     const stored = await getPurchase(p.id);
     expect(stored?.nonce).toBe("nonce123");
   });
@@ -66,20 +66,20 @@ describe("purchases", () => {
   it("confirmPurchase is idempotent and credits exactly once", async () => {
     const { createUser, createPurchase, confirmPurchase, balanceSeconds, txnsFor } = await fresh();
     const uid = await createUser("u2@example.com", "password123");
-    const p = await createPurchase(uid, 1, "btc");
-    const first = await confirmPurchase(p.id, "uuid-1", 106);
+    const p = await createPurchase(uid, 12, "btc");
+    const first = await confirmPurchase(p.id, "uuid-1", 1908);
     expect(first!.credited).toBe(true);
-    const second = await confirmPurchase(p.id, "uuid-2", 106);
+    const second = await confirmPurchase(p.id, "uuid-2", 1908);
     expect(second!.credited).toBe(false); // already confirmed
-    expect(await balanceSeconds(uid)).toBe(3600);
+    expect(await balanceSeconds(uid)).toBe(43200);
     expect((await txnsFor(uid)).length).toBe(1);
   });
 
   it("marks underpaid purchases and credits nothing", async () => {
     const { createUser, createPurchase, confirmPurchase, balanceSeconds, getPurchase } = await fresh();
     const uid = await createUser("u3@example.com", "password123");
-    const p = await createPurchase(uid, 12, "ltc");
-    const res = await confirmPurchase(p.id, "uuid-3", 500); // under 1081-2% tolerance
+    const p = await createPurchase(uid, 120, "ltc");
+    const res = await confirmPurchase(p.id, "uuid-3", 500); // under 16218-2% tolerance
     expect(res!.credited).toBe(false);
     expect((await getPurchase(p.id))!.status).toBe("underpaid");
     expect(await balanceSeconds(uid)).toBe(0);

@@ -99,15 +99,15 @@ describe("db atomicity under fault injection", () => {
   it("confirmPurchase is atomic: credit failure leaves purchase pending and retry credits exactly once", async () => {
     const m = await fresh();
     const uid = await m.createUser("d3@example.com", "password123");
-    const p = await m.createPurchase(uid, 1, "btc");
+    const p = await m.createPurchase(uid, 12, "btc");
     inj.failOn = "INSERT INTO credit_txns";
-    await expect(m.confirmPurchase(p.id, "uuid-1", 106)).rejects.toThrow(/injected/i);
+    await expect(m.confirmPurchase(p.id, "uuid-1", 1908)).rejects.toThrow(/injected/i);
     inj.failOn = null;
     expect((await m.getPurchase(p.id))!.status).toBe("pending"); // pre-fix bug: "confirmed"
     expect(await m.balanceSeconds(uid)).toBe(0);
-    const retry = await m.confirmPurchase(p.id, "uuid-2", 106);
+    const retry = await m.confirmPurchase(p.id, "uuid-2", 1908);
     expect(retry!.credited).toBe(true);
-    expect(await m.balanceSeconds(uid)).toBe(3600);
+    expect(await m.balanceSeconds(uid)).toBe(43200);
     expect((await m.txnsFor(uid)).length).toBe(1); // credited exactly once
   });
 });

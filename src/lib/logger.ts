@@ -11,6 +11,8 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
 
 const LEVEL_ORDER: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 
+export { LEVEL_ORDER };
+
 export type LogSink = (level: LogLevel, message: string, fields?: Record<string, unknown>) => void;
 
 const defaultSink: LogSink = (level, message, fields) => {
@@ -34,6 +36,26 @@ function parseLevel(v: string | undefined): LogLevel | null {
 export function configureLogger(opts: { level?: LogLevel; sink?: LogSink }): void {
   if (opts.level) minLevel = opts.level;
   if (opts.sink) sink = opts.sink;
+}
+
+/**
+ * Add a sink alongside the existing ones (e.g. the alerting webhook sink on
+ * top of the console sink). Returns a remover for tests.
+ */
+export function addSink(extraSink: LogSink): () => void {
+  const prev = sink;
+  sink = (level, message, fields) => {
+    prev(level, message, fields);
+    try {
+      extraSink(level, message, fields);
+    } catch {
+      // A broken sink must never take down the request path.
+      console.error(JSON.stringify({ ts: new Date().toISOString(), level, message }));
+    }
+  };
+  return () => {
+    sink = prev;
+  };
 }
 
 function emit(level: LogLevel, message: string, fields?: Record<string, unknown>): void {

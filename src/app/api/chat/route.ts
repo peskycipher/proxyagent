@@ -4,14 +4,17 @@ import { balanceSeconds, debit } from "@/lib/credits";
 import { ensurePodUp, touchPodActivity } from "@/lib/pod";
 import { Meter } from "@/lib/meter";
 import { getDb, newId } from "@/lib/db";
+import {
+  acquireChatLock,
+  releaseChatLock,
+  renewChatLock,
+  CHAT_LOCK_RENEW_INTERVAL_MS,
+} from "@/lib/chat-lock";
 
 const bodySchema = z.object({
   chatId: z.string().min(1).optional(),
   message: z.string().min(1).max(16000),
 });
-
-/** Per-user in-flight lock: prevents parallel double-burn of credits. */
-const inFlight = new Set<string>();
 
 const LLAMA_BASE = () => (process.env.LLAMA_SERVER_URL || "").replace(/\/$/, "");
 
@@ -28,7 +31,10 @@ export async function POST(req: Request) {
   if (!parsed.success) return Response.json({ error: "invalid request" }, { status: 400 });
   const { chatId, message } = parsed.data;
 
-  if (inFlight.has(userId)) {
+  // Distributed per-user lock (chat_locks TTL row): prevents parallel
+  // double-burn of credits, across instances and after crashes (stale locks
+  // expire via TTL). One stream at a time per account.
+  if (!(await acquireChatLock(userId))) {
     return Response.json({ error: "another request is already streaming for this account" }, { status: 429 });
   }
 
@@ -53,7 +59,6 @@ export async function POST(req: Request) {
   const history = await db
     .all<{ role: string; content: string }>("SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at ASC", effectiveChatId);
 
-  inFlight.add(userId);
   const encoder = new TextEncoder();
   const aborter = new AbortController();
 
@@ -66,6 +71,16 @@ export async function POST(req: Request) {
       let assistantContent = "";
       let billed = 0;
       let cleanedUp = false;
+
+      // Keep the chat lock alive while the stream runs (renew well inside the
+      // TTL so a minutes-long stream never expires mid-flight).
+      const heartbeat = setInterval(() => {
+        renewChatLock(userId)
+          .then((held) => {
+            if (!held) console.error("chat lock lost mid-stream", { userId });
+          })
+          .catch((e) => console.error("chat lock renew failed", (e as Error).message));
+      }, CHAT_LOCK_RENEW_INTERVAL_MS);
 
       const cleanup = async () => {
         if (cleanedUp) return;
@@ -86,7 +101,14 @@ export async function POST(req: Request) {
           // debit failure: log loudly, but the stream is already over
           console.error("chat cleanup error", (e as Error).message);
         }
-        inFlight.delete(userId);
+        // Release the lock even when billing failed above — a stuck lock would
+        // block this user's next message until the TTL lapses.
+        clearInterval(heartbeat);
+        try {
+          await releaseChatLock(userId);
+        } catch (e) {
+          console.error("chat lock release failed", (e as Error).message);
+        }
         try { controller.close(); } catch { /* already closed */ }
       };
 
@@ -102,7 +124,6 @@ export async function POST(req: Request) {
           signal: aborter.signal,
         });
         if (!upstreamRes.ok || !upstreamRes.body) {
-          const detail = await upstreamRes.text().catch(() => "");
           send("error", { message: `model upstream error ${upstreamRes.status}` });
           cleanup();
           return;

@@ -229,6 +229,11 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_txns_user ON credit_txns(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_purchases_user ON purchases(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);
+
+CREATE TABLE IF NOT EXISTS chat_locks (
+  user_id TEXT PRIMARY KEY REFERENCES users(id),
+  expires_at INTEGER NOT NULL
+);
 `;
 
 export function newId(prefix: string): string {

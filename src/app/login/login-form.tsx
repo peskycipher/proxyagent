@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import { pathOnlyNext } from "@/lib/safe-next";
 import GitHubMark from "@/components/github-mark";
 import GoogleMark from "@/components/google-mark";
 import Turnstile from "@/components/turnstile";
@@ -36,6 +37,9 @@ export default function LoginForm({
   const [busy, setBusy] = useState(false);
 
   const oauthError = OAUTH_ERRORS[params.get("error") ?? ""];
+  // Path-form only: an absolute or protocol-relative next would open-redirect
+  // the just-authenticated user to another origin.
+  const next = pathOnlyNext(params.get("next"), "/portal");
   const captchaRequired = Boolean(turnstileSiteKey);
   const captchaOk = !captchaRequired || Boolean(captchaToken);
 
@@ -58,7 +62,7 @@ export default function LoginForm({
       setBusy(false);
       return;
     }
-    router.push(params.get("next") || "/portal");
+    router.push(next);
     router.refresh();
   }
 
@@ -74,7 +78,7 @@ export default function LoginForm({
                 className="btn"
                 type="button"
                 style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-                onClick={() => signIn("google", { callbackUrl: params.get("next") || "/portal" })}
+                onClick={() => signIn("google", { callbackUrl: next })}
               >
                 <GoogleMark />
                 Continue with Google
@@ -85,7 +89,7 @@ export default function LoginForm({
                 className="btn"
                 type="button"
                 style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-                onClick={() => signIn("github", { callbackUrl: params.get("next") || "/portal" })}
+                onClick={() => signIn("github", { callbackUrl: next })}
               >
                 <GitHubMark />
                 Continue with GitHub

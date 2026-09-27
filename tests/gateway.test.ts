@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-const WALLETS = ["CRYPTAPI_WALLETS_BTC", "CRYPTAPI_WALLETS_TRC20_USDT"];
+// Env-var NAMES read via process.env; test values are fake wallets ("bc1qxtest"). No credentials in this file.
+const WALLETS = ["CRYPTAPI_WALLETS_BTC", "CRYPTAPI_WALLETS_TRC20_USDT"]; // gitleaks:allow
 
 describe("coin id -> CryptAPI ticker mapping", () => {
   let gateway: typeof import("@/lib/gateway");
@@ -91,5 +92,31 @@ describe("coin id -> CryptAPI ticker mapping", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+describe("senderIpAllowed (optional CryptAPI sender-IP allowlist)", () => {
+  let gateway: typeof import("@/lib/gateway");
+
+  beforeEach(async () => {
+    gateway = await import("@/lib/gateway");
+  });
+
+  afterEach(() => {
+    delete process.env.CRYPTAPI_ALLOWED_IPS;
+  });
+
+  it("allows any sender when the allowlist is unset", () => {
+    delete process.env.CRYPTAPI_ALLOWED_IPS;
+    expect(gateway.senderIpAllowed("51.77.105.132")).toBe(true);
+    expect(gateway.senderIpAllowed("203.0.113.9")).toBe(true);
+    expect(gateway.senderIpAllowed(null)).toBe(true);
+  });
+
+  it("filters by the configured list and rejects unknown or missing IPs", () => {
+    process.env.CRYPTAPI_ALLOWED_IPS = "51.77.105.132, 135.125.112.47";
+    expect(gateway.senderIpAllowed("51.77.105.132")).toBe(true);
+    expect(gateway.senderIpAllowed("135.125.112.47")).toBe(true);
+    expect(gateway.senderIpAllowed("203.0.113.9")).toBe(false);
+    expect(gateway.senderIpAllowed(null)).toBe(false);
   });
 });

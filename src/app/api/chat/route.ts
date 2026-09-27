@@ -10,6 +10,7 @@ import {
   renewChatLock,
   CHAT_LOCK_RENEW_INTERVAL_MS,
 } from "@/lib/chat-lock";
+import { historyBudgets, trimHistory } from "@/lib/chat-history";
 import { logger } from "@/lib/logger";
 
 const bodySchema = z.object({
@@ -39,7 +40,8 @@ export async function POST(req: Request) {
     return Response.json({ error: "another request is already streaming for this account" }, { status: 429 });
   }
 
-  if ((await balanceSeconds(userId)) < 1) {
+  const balance = await balanceSeconds(userId);
+  if (balance < 1) {
     return Response.json({ error: "insufficient credits — buy more time in the portal" }, { status: 402 });
   }
 
@@ -57,12 +59,14 @@ export async function POST(req: Request) {
   const userMsgId = newId("msg");
   await db.run("INSERT INTO messages (id, chat_id, role, content, created_at) VALUES (?,?,?,?,?)", userMsgId, effectiveChatId, "user", message, Date.now());
 
-  const history = await db
+  const allHistory = await db
     .all<{ role: string; content: string }>("SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at ASC", effectiveChatId);
+  // Bound the prompt: newest messages win (see lib/chat-history.ts) so long
+  // chats cannot overflow the model context or bloat every request.
+  const history = trimHistory(allHistory, historyBudgets().maxMessages, historyBudgets().maxChars);
 
   const encoder = new TextEncoder();
   const aborter = new AbortController();
-
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (event: string, data: unknown) => {
@@ -72,6 +76,13 @@ export async function POST(req: Request) {
       let assistantContent = "";
       let billed = 0;
       let cleanedUp = false;
+      // Stop-loss: a stream may never bill more than the balance the account
+      // held when the model request began. The abort ends the upstream read;
+      // cleanup then bills actual usage — the user is charged only for real
+      // model time, capped at their balance (never overdrawn, never
+      // overcharged). Only balance-growing operations (purchase confirms) can
+      // change the balance during a stream: chat is one-stream-per-account.
+      const stopLoss = setTimeout(() => aborter.abort(), Math.max(1, balance) * 1000);
 
       // Keep the chat lock alive while the stream runs (renew well inside the
       // TTL so a minutes-long stream never expires mid-flight).
@@ -87,6 +98,7 @@ export async function POST(req: Request) {
       const cleanup = async () => {
         if (cleanedUp) return;
         cleanedUp = true;
+        clearTimeout(stopLoss);
         try {
           if (meter) billed = meter.stop();
           if (billed > 0) {

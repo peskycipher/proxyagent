@@ -9,8 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chat & billing (review fixes)**
+  - Streaming stop-loss: a chat stream can never bill more than the balance held when the model request began — the upstream read is aborted at that point and actual usage is billed, so accounts can no longer overdraft (previously the end-of-stream debit threw and was skipped, leaving free overage).
+  - Model-context budget: chat history sent to the model is capped (default last 40 messages / 24k chars; `CHAT_HISTORY_MAX_MESSAGES`, `CHAT_HISTORY_MAX_CHARS`), newest-wins, current message always kept.
+
+### Fixed
+
+- Login form: `?next=` is validated to path-form only (`lib/safe-next.ts`) before use in `router.push` and OAuth `callbackUrl`, closing a post-auth open redirect (absolute/protocol-relative URLs fall back to `/portal`).
+
+- **Payments (CryptAPI best-practice gaps closed)**
+  - Optional sender-IP allowlist for the gateway webhook (`CRYPTAPI_ALLOWED_IPS`; documented IPs 51.77.105.132 / 135.125.112.47). Off by default so IP rotation can't drop webhooks; signature verification stays the primary gate.
+  - Underpayment/expiry now surfaces to the customer: portal shows a warning banner when a pending purchase settles as `underpaid` or `expired`, instead of silently closing the payment panel.
+  - Underpaid confirmations emit an ops alert through the logger/alert-sink with coin, expected vs received USD.
+  - Portal payment panel icons migrated to nerd-fonts SVG symbols (`cod-warning` asset in `public/icons/`).
+### Added
+
 - **Chat**
-  - Delete chat threads from the sidebar: hover trash icon (nerd-fonts `cod-trash` SVG) with confirm dialog.
+  - Delete chat threads from the sidebar: hover trash icon (nerd-fonts `cod-trash` SVG) deletes immediately on click, no confirmation dialog.
   - `DELETE /api/chats/[id]` removes the chat and its messages atomically, owner-checked.
   - Deletion is disabled while a stream is in flight to avoid racing its writes.
 

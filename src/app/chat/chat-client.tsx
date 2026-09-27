@@ -60,7 +60,10 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
 
   async function deleteChat(id: string) {
     // Avoid racing an in-flight stream that still writes messages to this chat.
-    if (streaming || !window.confirm("Delete this chat? This cannot be undone.")) return;
+    // No confirmation: clicking the trash icon deletes the thread immediately.
+    // (The button itself is disabled while a stream is in flight, so no other
+    // guard is needed here.)
+    if (streaming) return;
     const res = await fetch(`/api/chats/${id}`, { method: "DELETE" });
     if (res.ok) {
       setChats((c) => c.filter((x) => x.id !== id));

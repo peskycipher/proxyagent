@@ -1,4 +1,5 @@
 import { getDb, newId, type DbStmt } from "@/lib/db";
+import { logger } from "@/lib/logger";
 import { priceUsdCents, secondsForBlock, tierFor } from "@/lib/pricing";
 
 export interface PurchaseRow {
@@ -91,6 +92,18 @@ export async function confirmPurchase(
     typeof receivedUsdCents === "number" &&
     receivedUsdCents < purchase.amount_usd_cents - Math.ceil(purchase.amount_usd_cents * 0.02);
   const status = underpaid ? "underpaid" : "confirmed";
+  if (underpaid) {
+    // Ops visibility: an underpaid purchase credits nothing; the alert sink
+    // (ALERT_WEBHOOK_URL) receives this through the logger so support can
+    // reconcile with the customer (docs/error-handling.md).
+    logger.error("purchase underpaid — not credited", {
+      purchaseId,
+      userId: purchase.user_id,
+      coin: purchase.coin,
+      receivedUsdCents: receivedUsdCents ?? null,
+      expectedUsdCents: purchase.amount_usd_cents,
+    });
+  }
 
   const stmts: DbStmt[] = [
     {

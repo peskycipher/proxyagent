@@ -115,6 +115,20 @@ export async function createCharge(params: CreateChargeParams): Promise<Charge> 
   };
 }
 
+/**
+ * Optional CryptAPI sender-IP allowlist (docs/how-webhooks-work.md#best-practices:
+ * whitelist 51.77.105.132 and 135.125.112.47). Enforcement is opt-in: when
+ * CRYPTAPI_ALLOWED_IPS is set (comma-separated), only requests from those IPs
+ * are accepted. Default OFF so an IP rotation at CryptAPI can never drop
+ * webhooks — signature verification stays the primary gate.
+ */
+export function senderIpAllowed(clientIp: string | null): boolean {
+  const allow = process.env.CRYPTAPI_ALLOWED_IPS;
+  if (!allow) return true;
+  if (!clientIp) return false;
+  return allow.split(",").some((s) => s.trim() === clientIp);
+}
+
 /** Coins we accept, from CRYPTAPI_WALLETS_<TICKER> env vars. */
 export function acceptedCoins(): string[] {
   return Object.entries(process.env)

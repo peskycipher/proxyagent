@@ -64,6 +64,13 @@ export default function PortalClient({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<"address" | "amount" | null>(null);
+  /** Terminal settle outcome of the last active purchase: "underpaid" | "expired". */
+  const [settle, setSettle] = useState<"underpaid" | "expired" | null>(null);
+
+  const settleMessage: Record<"underpaid" | "expired", string> = {
+    underpaid: "Payment received was below the purchase price, so no credits were added. A new payment address is needed to try again.",
+    expired: "The payment window closed with no deposit detected. No charges were made — start a new purchase to try again.",
+  };
 
   function copyToClipboard(value: string, which: "address" | "amount") {
     void navigator.clipboard.writeText(value).then(() => {
@@ -84,6 +91,7 @@ export default function PortalClient({
       if (body.status !== "pending") {
         clearInterval(t);
         setActive(null);
+        if (body.status === "underpaid" || body.status === "expired") setSettle(body.status);
         const me = await fetch("/api/me").then((r) => r.json());
         setBalance(me.balanceSeconds ?? balance);
         router.refresh();
@@ -95,6 +103,7 @@ export default function PortalClient({
   async function buy() {
     setBusy(true);
     setError("");
+    setSettle(null);
     const res = await fetch("/api/purchases", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -271,9 +280,15 @@ export default function PortalClient({
                   </div>
                 )}
                 {typeof active.minimumTransactionCoin === "number" && (
-                  <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8, background: "var(--bg)", border: "1px solid var(--border)" }}>
-                    ⚠️ Minimum transaction: <strong>{active.minimumTransactionCoin} {coin.toUpperCase()}</strong> — payments below
-                    this amount are <strong>not credited and the funds are lost</strong>.
+                  <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8, background: "var(--bg)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+                    {/* nerd-fonts symbol: cod-warning — SVG asset: public/icons/nf-cod-warning.svg */}
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style={{ flexShrink: 0 }}>
+                      <path d="M14.831 11.965L9.206 1.714C8.965 1.274 8.503 1 8 1C7.497 1 7.035 1.274 6.794 1.714L1.169 11.965C1.059 12.167 1 12.395 1 12.625C1 13.383 1.617 14 2.375 14H13.625C14.383 14 15 13.383 15 12.625C15 12.395 14.941 12.167 14.831 11.965ZM13.625 13H2.375C2.168 13 2 12.832 2 12.625C2 12.561 2.016 12.5 2.046 12.445L7.671 2.195C7.736 2.075 7.863 2 8 2C8.137 2 8.264 2.075 8.329 2.195L13.954 12.445C13.984 12.501 14 12.561 14 12.625C14 12.832 13.832 13 13.625 13ZM8.75 11.25C8.75 11.664 8.414 12 8 12C7.586 12 7.25 11.664 7.25 11.25C7.25 10.836 7.586 10.5 8 10.5C8.414 10.5 8.75 10.836 8.75 11.25ZM7.5 9V5.5C7.5 5.086 7.836 4.75 8.25 4.75C8.664 4.75 9 5.086 9 5.5V9C9 9.414 8.664 9.75 8.25 9.75C7.836 9.75 7.5 9.414 7.5 9Z" />
+                    </svg>
+                    <span>
+                      Minimum transaction: <strong>{active.minimumTransactionCoin} {coin.toUpperCase()}</strong> — payments below
+                      this amount are <strong>not credited and the funds are lost</strong>.
+                    </span>
                   </div>
                 )}
               </div>
@@ -285,6 +300,18 @@ export default function PortalClient({
           </div>
         )}
       </div>
+
+      {settle && (
+        <div className="panel" style={{ padding: 20, marginBottom: 20, border: "1px solid var(--danger)", display: "flex", alignItems: "flex-start", gap: 10, color: "var(--danger)" }}>
+          {/* nerd-fonts symbol: cod-warning — SVG asset: public/icons/nf-cod-warning.svg */}
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style={{ flexShrink: 0, marginTop: 3 }}>
+            <path d="M14.831 11.965L9.206 1.714C8.965 1.274 8.503 1 8 1C7.497 1 7.035 1.274 6.794 1.714L1.169 11.965C1.059 12.167 1 12.395 1 12.625C1 13.383 1.617 14 2.375 14H13.625C14.383 14 15 13.383 15 12.625C15 12.395 14.941 12.167 14.831 11.965ZM13.625 13H2.375C2.168 13 2 12.832 2 12.625C2 12.561 2.016 12.5 2.046 12.445L7.671 2.195C7.736 2.075 7.863 2 8 2C8.137 2 8.264 2.075 8.329 2.195L13.954 12.445C13.984 12.501 14 12.561 14 12.625C14 12.832 13.832 13 13.625 13ZM8.75 11.25C8.75 11.664 8.414 12 8 12C7.586 12 7.25 11.664 7.25 11.25C7.25 10.836 7.586 10.5 8 10.5C8.414 10.5 8.75 10.836 8.75 11.25ZM7.5 9V5.5C7.5 5.086 7.836 4.75 8.25 4.75C8.664 4.75 9 5.086 9 5.5V9C9 9.414 8.664 9.75 8.25 9.75C7.836 9.75 7.5 9.414 7.5 9Z" />
+          </svg>
+          <span>
+            <strong>{settle === "underpaid" ? "Payment underpaid" : "Payment expired"}</strong> — {settleMessage[settle]}
+          </span>
+        </div>
+      )}
 
       <div className="panel" style={{ padding: 20 }}>
         <h2 style={{ marginTop: 0 }}>Recent purchases</h2>

@@ -1,4 +1,4 @@
-import { getGatewayPubKey, usdCentsFromConvertJson, verifyWebhookSignature } from "@/lib/gateway";
+import { getGatewayPubKey, senderIpAllowed, usdCentsFromConvertJson, verifyWebhookSignature } from "@/lib/gateway";
 import { confirmPurchase, getPurchase } from "@/lib/purchases";
 import { logger } from "@/lib/logger";
 
@@ -27,6 +27,17 @@ async function handle(req: Request, { params }: { params: Promise<{ secret: stri
   if (!invoiceId) return new Response("missing invoice", { status: 400 });
 
   const isPost = req.method === "POST";
+
+  // Optional sender-IP allowlist (CryptAPI docs recommend whitelisting their
+  // two sending IPs; enabled via CRYPTAPI_ALLOWED_IPS). Runs before any DB hit.
+  const clientIp =
+    req.headers.get("cf-connecting-ip") ??
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    null;
+  if (!senderIpAllowed(clientIp)) {
+    logger.error("webhook rejected by IP allowlist", { ip: clientIp });
+    return new Response("forbidden", { status: 403 });
+  }
 
   // Signature data: the exact URL CryptAPI requested for GET webhooks; the
   // raw body for POST webhooks (CryptAPI docs, verify-webhook-signature).

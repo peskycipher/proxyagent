@@ -1,5 +1,6 @@
 import { getGatewayPubKey, usdCentsFromConvertJson, verifyWebhookSignature } from "@/lib/gateway";
 import { confirmPurchase, getPurchase } from "@/lib/purchases";
+import { logger } from "@/lib/logger";
 
 /**
  * CryptAPI callback endpoint. Secret path segment (GATEWAY_WEBHOOK_SECRET)
@@ -46,7 +47,7 @@ async function handle(req: Request, { params }: { params: Promise<{ secret: stri
     verified = false;
   }
   if (!verified) {
-    console.error("webhook signature verification failed", { invoiceId });
+    logger.error("webhook signature verification failed", { invoiceId });
     return new Response("unauthorized", { status: 401 });
   }
 
@@ -58,7 +59,7 @@ async function handle(req: Request, { params }: { params: Promise<{ secret: stri
   // signature check). Legacy purchases predating the nonce column pass.
   const nonce = url.searchParams.get("nonce");
   if (purchase.nonce && nonce !== purchase.nonce) {
-    console.error("webhook nonce mismatch", { invoiceId });
+    logger.error("webhook nonce mismatch", { invoiceId });
     return new Response("forbidden", { status: 403 });
   }
 

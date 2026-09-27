@@ -10,6 +10,7 @@ import {
   renewChatLock,
   CHAT_LOCK_RENEW_INTERVAL_MS,
 } from "@/lib/chat-lock";
+import { logger } from "@/lib/logger";
 
 const bodySchema = z.object({
   chatId: z.string().min(1).optional(),
@@ -77,9 +78,9 @@ export async function POST(req: Request) {
       const heartbeat = setInterval(() => {
         renewChatLock(userId)
           .then((held) => {
-            if (!held) console.error("chat lock lost mid-stream", { userId });
+            if (!held) logger.error("chat lock lost mid-stream", { userId });
           })
-          .catch((e) => console.error("chat lock renew failed", (e as Error).message));
+          .catch((e) => logger.error("chat lock renew failed", { userId, error: (e as Error).message }));
       }, CHAT_LOCK_RENEW_INTERVAL_MS);
 
       const cleanup = async () => {
@@ -99,7 +100,7 @@ export async function POST(req: Request) {
           send("done", { billedSeconds: billed, chatId: effectiveChatId, balanceSeconds: await balanceSeconds(userId) });
         } catch (e) {
           // debit failure: log loudly, but the stream is already over
-          console.error("chat cleanup error", (e as Error).message);
+          logger.error("chat cleanup error", { chatId: effectiveChatId, error: (e as Error).message });
         }
         // Release the lock even when billing failed above — a stuck lock would
         // block this user's next message until the TTL lapses.
@@ -107,7 +108,7 @@ export async function POST(req: Request) {
         try {
           await releaseChatLock(userId);
         } catch (e) {
-          console.error("chat lock release failed", (e as Error).message);
+          logger.error("chat lock release failed", { userId, error: (e as Error).message });
         }
         try { controller.close(); } catch { /* already closed */ }
       };
@@ -124,6 +125,7 @@ export async function POST(req: Request) {
           signal: aborter.signal,
         });
         if (!upstreamRes.ok || !upstreamRes.body) {
+          logger.error("model upstream error", { chatId: effectiveChatId, status: upstreamRes.status });
           send("error", { message: `model upstream error ${upstreamRes.status}` });
           cleanup();
           return;
@@ -163,6 +165,7 @@ export async function POST(req: Request) {
         cleanup();
       } catch (e) {
         send("error", { message: (e as Error).message });
+        logger.error("chat stream failed", { chatId: effectiveChatId, error: (e as Error).message });
         cleanup();
       }
     },

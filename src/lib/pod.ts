@@ -1,4 +1,5 @@
 import { getPod, startPod, stopPod, llamaHealthy } from "@/lib/runpod";
+import { logger } from "@/lib/logger";
 
 /**
  * Pod lifecycle: ensure running before a chat request, auto-stop after idle.
@@ -55,12 +56,12 @@ function startIdleStopper(): void {
       const pod = await getPod();
       if (pod.status === "RUNNING") {
         await stopPod();
-        console.log("pod stopped after idle timeout");
+        logger.info("pod stopped after idle timeout");
       }
       clearInterval(timer);
       idleStopperStarted = false;
     } catch (e) {
-      console.error("idle stopper error", (e as Error).message);
+      logger.error("idle stopper error", { error: (e as Error).message });
     }
   }, 30_000);
   // don't hold the process open in dev

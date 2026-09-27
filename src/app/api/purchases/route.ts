@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { acceptedCoins, convertUsdToCoin, createCharge, getQrcode, payoutWalletFor } from "@/lib/gateway";
 import { createPurchase, attachCharge } from "@/lib/purchases";
 import { tierFor } from "@/lib/pricing";
+import { logger } from "@/lib/logger";
 import { randomBytes } from "node:crypto";
 
 const bodySchema = z.object({ hours: z.number().int(), coin: z.string().regex(/^[a-z0-9_]+$/) });
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
   } catch (e) {
     // Log the gateway's diagnostic detail server-side only; don't leak
     // upstream internals to the client.
-    console.error("createCharge failed", (e as Error).message);
+    logger.error("createCharge failed", { error: (e as Error).message });
     return NextResponse.json({ error: "payment gateway error — try again" }, { status: 502 });
   }
 }

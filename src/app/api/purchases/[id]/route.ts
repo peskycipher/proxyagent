@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getPurchase } from "@/lib/purchases";
 import { reconcilePurchase } from "@/lib/reconcile";
+import { logger } from "@/lib/logger";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -18,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       await reconcilePurchase(purchase.id);
       purchase = (await getPurchase(id)) ?? purchase;
     } catch (e) {
-      console.error("reconcile failed", { id, error: (e as Error).message });
+      logger.error("reconcile failed", { id, error: (e as Error).message });
     }
   }
   return NextResponse.json({

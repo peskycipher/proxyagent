@@ -27,6 +27,7 @@ export default async function Portal() {
         seconds: p.seconds,
         amountUsdCents: p.amount_usd_cents,
         status: p.status,
+        createdAt: p.created_at,
       }))}
     />
   );

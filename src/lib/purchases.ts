@@ -46,6 +46,14 @@ export async function attachCharge(purchaseId: string, addressIn: string): Promi
   await (await getDb()).run("UPDATE purchases SET address_in = ? WHERE id = ?", addressIn, purchaseId);
 }
 
+/** Mark a stale purchase expired (only pending purchases can expire). */
+export async function expirePurchase(purchaseId: string): Promise<void> {
+  await (await getDb()).run(
+    "UPDATE purchases SET status = 'expired' WHERE id = ? AND status = 'pending'",
+    purchaseId,
+  );
+}
+
 export async function getPurchase(purchaseId: string): Promise<PurchaseRow | null> {
   return (await (await getDb()).get<PurchaseRow>("SELECT * FROM purchases WHERE id = ?", purchaseId)) ?? null;
 }

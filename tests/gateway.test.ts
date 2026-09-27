@@ -49,4 +49,47 @@ describe("coin id -> CryptAPI ticker mapping", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("usdCentsFromConvertJson parses USD values and rejects junk", () => {
+    expect(gateway.usdCentsFromConvertJson('{"USD": "3.20"}')).toBe(320);
+    expect(gateway.usdCentsFromConvertJson('{"USD": 15.90, "EUR": "14.60"}')).toBe(1590);
+    expect(gateway.usdCentsFromConvertJson('{"EUR": "14.60"}')).toBeNull();
+    expect(gateway.usdCentsFromConvertJson("not json")).toBeNull();
+    expect(gateway.usdCentsFromConvertJson(null)).toBeNull();
+  });
+
+  it("getGatewayLogs returns parsed callbacks and null on failure", async () => {
+    const good = {
+      status: "success",
+      callbacks: [
+        {
+          txid_in: "tx1",
+          result: "sent",
+          value_coin: 0.01,
+          logs: [{ request_url: "https://site.example/cb?uuid=u1&pending=0" }],
+        },
+        { result: "pending", value_coin: 0.02 },
+      ],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(good), { status: 200 }))
+      .mockResolvedValueOnce(new Response("error", { status: 500 }))
+      .mockRejectedValueOnce(new Error("network down"));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const logs = await gateway.getGatewayLogs("btc", "https://site.example/cb");
+      expect(logs).toHaveLength(2);
+      expect(logs![0]).toEqual({
+        txidIn: "tx1",
+        result: "sent",
+        valueCoin: 0.01,
+        requestUrl: "https://site.example/cb?uuid=u1&pending=0",
+      });
+      expect(logs![1].requestUrl).toBeNull();
+      expect(await gateway.getGatewayLogs("btc", "https://site.example/cb")).toBeNull();
+      expect(await gateway.getGatewayLogs("btc", "https://site.example/cb")).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

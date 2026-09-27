@@ -28,6 +28,7 @@ interface PastPurchase {
   seconds: number;
   amountUsdCents: number;
   status: string;
+  createdAt: number;
 }
 
 function fmt(seconds: number): string {
@@ -296,7 +297,7 @@ export default function PortalClient({
                 <tr key={p.id}>
                   <td style={{ padding: "6px 0" }}>{fmt(p.seconds)}</td>
                   <td className="muted">{coinLabel(p.coin)}</td>
-                  <td className="muted">{new Date().toLocaleDateString()}</td>
+                  <td className="muted">{new Date(p.createdAt).toLocaleDateString()}</td>
                   <td style={{ textAlign: "right" }}>
                     ${(p.amountUsdCents / 100).toFixed(2)}{" "}
                     <span style={{ color: p.status === "confirmed" ? "var(--accent)" : "var(--muted)" }}>({p.status})</span>

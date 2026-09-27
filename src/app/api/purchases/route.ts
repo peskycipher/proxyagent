@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { acceptedCoins, convertUsdToCoin, createCharge, payoutWalletFor, tickerFor } from "@/lib/gateway";
+import { acceptedCoins, convertUsdToCoin, createCharge, getQrcode, payoutWalletFor } from "@/lib/gateway";
 import { createPurchase, attachCharge } from "@/lib/purchases";
 import { tierFor } from "@/lib/pricing";
 import { randomBytes } from "node:crypto";
@@ -51,19 +51,28 @@ export async function POST(req: Request) {
   try {
     const charge = await createCharge({ coin, payoutAddress: payout, callbackUrl });
     await attachCharge(purchase.id, charge.addressIn);
-    // CryptAPI best practice: show a scannable QR of the deposit address.
-    // Non-fatal — if the QR endpoint hiccups the address is still displayed.
-    const ticker = tickerFor(coin).split("/").map(encodeURIComponent).join("/");
-    const qr = await fetch(
-      `https://api.cryptapi.io/${ticker}/qrcode/?address=${encodeURIComponent(charge.addressIn)}&size=300`,
-      { signal: AbortSignal.timeout(10000) },
-    )
-      .then((r) => (r.ok ? (r.json() as { qr_code?: string }) : null))
-      .then((b) => b?.qr_code ?? null)
-      .catch(() => null);
     // CryptAPI best practice (ecommerce flow): show the USD price converted to
     // the selected coin so the user knows how much to transfer. Non-fatal.
-    const coinAmount = await convertUsdToCoin(ticker, purchase.amount_usd_cents / 100);
+    const coinAmount = await convertUsdToCoin(coin, purchase.amount_usd_cents / 100);
+    // CryptAPI best practice: verify the converted amount clears the network
+    // minimum — payments below it are ignored and the funds are lost.
+    if (
+      coinAmount !== null &&
+      charge.minimumTransactionCoin > 0 &&
+      coinAmount < charge.minimumTransactionCoin
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            `amount below network minimum for ${coin} — need at least ` +
+            `${charge.minimumTransactionCoin} ${coin.toUpperCase()}, try a different coin`,
+        },
+        { status: 400 },
+      );
+    }
+    // CryptAPI best practice: show a scannable QR of the deposit address.
+    // Non-fatal — if the QR endpoint hiccups the address is still displayed.
+    const qr = await getQrcode(coin, charge.addressIn);
     return NextResponse.json({
       purchaseId: purchase.id,
       addressIn: charge.addressIn,
@@ -74,7 +83,10 @@ export async function POST(req: Request) {
       coinAmount,
     });
   } catch (e) {
-    return NextResponse.json({ error: `payment gateway error: ${(e as Error).message}` }, { status: 502 });
+    // Log the gateway's diagnostic detail server-side only; don't leak
+    // upstream internals to the client.
+    console.error("createCharge failed", (e as Error).message);
+    return NextResponse.json({ error: "payment gateway error — try again" }, { status: 502 });
   }
 }
 

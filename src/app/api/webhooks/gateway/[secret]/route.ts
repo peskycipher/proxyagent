@@ -1,11 +1,13 @@
-import { NextResponse } from "next/server";
-import { getGatewayPubKey, verifyWebhookSignature } from "@/lib/gateway";
+import { getGatewayPubKey, usdCentsFromConvertJson, verifyWebhookSignature } from "@/lib/gateway";
 import { confirmPurchase, getPurchase } from "@/lib/purchases";
 
 /**
  * CryptAPI callback endpoint. Secret path segment (GATEWAY_WEBHOOK_SECRET)
  * + RSA-SHA256 signature in x-ca-signature must both check out.
  * CryptAPI (GET webhooks) expects the literal response body "*ok*".
+ *
+ * Per the CryptAPI docs, GET webhooks sign the full URL; POST webhooks
+ * (post=1) sign the raw body. Both are supported here.
  */
 async function handle(req: Request, { params }: { params: Promise<{ secret: string }> }) {
   const { secret } = await params;
@@ -23,15 +25,23 @@ async function handle(req: Request, { params }: { params: Promise<{ secret: stri
   const invoiceId = url.searchParams.get("invoice");
   if (!invoiceId) return new Response("missing invoice", { status: 400 });
 
-  // Verify signature over the exact URL CryptAPI requested.
+  const isPost = req.method === "POST";
+
+  // Signature data: the exact URL CryptAPI requested for GET webhooks; the
+  // raw body for POST webhooks (CryptAPI docs, verify-webhook-signature).
   const signature = req.headers.get("x-ca-signature");
-  let proto = req.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
-  const host = req.headers.get("host") ?? url.host;
-  const reconstructed = `${proto}://${host}${url.pathname}${url.search}`;
+  let signedData: string;
+  if (isPost) {
+    signedData = await req.text();
+  } else {
+    let proto = req.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
+    const host = req.headers.get("host") ?? url.host;
+    signedData = `${proto}://${host}${url.pathname}${url.search}`;
+  }
   let verified = false;
   try {
     const pubkey = await getGatewayPubKey();
-    verified = verifyWebhookSignature(reconstructed, signature, pubkey);
+    verified = verifyWebhookSignature(signedData, signature, pubkey);
   } catch {
     verified = false;
   }
@@ -52,24 +62,33 @@ async function handle(req: Request, { params }: { params: Promise<{ secret: stri
     return new Response("forbidden", { status: 403 });
   }
 
-  const pending = url.searchParams.get("pending");
-  const uuid = url.searchParams.get("uuid") ?? "";
+  // With post=1 the payload fields arrive in the body; custom params (invoice,
+  // nonce) always stay in the query string (CryptAPI docs).
+  let fields: URLSearchParams;
+  if (isPost) {
+    fields = new URLSearchParams(signedData);
+  } else {
+    fields = url.searchParams;
+  }
+
+  const pending = fields.get("pending");
+  const uuid = fields.get("uuid") ?? "";
 
   if (pending === "0") {
-    // Confirmed webhook. USD received (convert=1) guards against underpayment;
-    // without convert data we accept the confirmed amount as-is.
-    let receivedUsdCents: number | undefined;
-    const convertRaw = url.searchParams.get("value_forwarded_coin_convert");
-    if (convertRaw) {
-      try {
-        const conv = JSON.parse(convertRaw) as Record<string, string>;
-        const usd = Number(conv.USD);
-        if (Number.isFinite(usd) && usd > 0) receivedUsdCents = Math.round(usd * 100);
-      } catch {
-        // ignore malformed conversion data
-      }
+    if (!uuid) {
+      // gateway_ref doubles as the webhook idempotency key — a confirmed
+      // webhook without a uuid cannot be processed safely.
+      return new Response("missing uuid", { status: 400 });
     }
-    await confirmPurchase(invoiceId, uuid || `unverified_${Date.now()}`, receivedUsdCents);
+    // Confirmed webhook. USD received guards against underpayment: prefer the
+    // GROSS converted value (value_coin_convert = before CryptAPI fees) so a
+    // customer who paid in full is never misclassified by fee deduction;
+    // fall back to the forwarded value when the gross one is absent.
+    const receivedUsdCents =
+      usdCentsFromConvertJson(fields.get("value_coin_convert")) ??
+      usdCentsFromConvertJson(fields.get("value_forwarded_coin_convert")) ??
+      undefined;
+    await confirmPurchase(invoiceId, uuid, receivedUsdCents);
   }
   // pending=1 callbacks only acknowledge detection; no crediting.
 

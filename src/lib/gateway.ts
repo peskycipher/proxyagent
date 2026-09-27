@@ -8,13 +8,18 @@ import { createVerify } from "node:crypto";
 
 const CRYPTAPI_API_BASE = process.env.CRYPTAPI_API_BASE || "https://api.cryptapi.io";
 
+/** Base URL of the CryptAPI API (overridable for staging/tests). */
+export function apiBase(): string {
+  return process.env.CRYPTAPI_API_BASE || "https://api.cryptapi.io";
+}
+
 let cachedPubKey: string | null = null;
 
 /** RSA public key used to sign webhooks (fetched once, cached). */
 export async function getGatewayPubKey(): Promise<string> {
   if (process.env.CRYPTAPI_PUBKEY) return process.env.CRYPTAPI_PUBKEY;
   if (cachedPubKey) return cachedPubKey;
-  const res = await fetch("https://api.cryptapi.io/pubkey/");
+  const res = await fetch(`${apiBase()}/pubkey/`);
   if (!res.ok) throw new Error(`failed to fetch gateway public key: ${res.status}`);
   cachedPubKey = await res.text();
   return cachedPubKey;
@@ -35,15 +40,16 @@ export interface Charge {
 
 /**
  * Convert a USD amount to the coin amount via CryptAPI's convert endpoint
- * ({ticker}/convert/?value=..&from=USD). Returns null on any failure —
- * the portal then shows only the USD price. Ticker is the CryptAPI path
- * form (e.g. "btc", "trc20/usdt").
+ * ({ticker}/convert/?value=..&from=USD). Accepts a coin id ("btc",
+ * "trc20_usdt") or a ticker path. Returns null on any failure —
+ * the portal then shows only the USD price.
  */
-export async function convertUsdToCoin(ticker: string, usd: number): Promise<number | null> {
+export async function convertUsdToCoin(coin: string, usd: number): Promise<number | null> {
   if (!Number.isFinite(usd) || usd <= 0) return null;
+  const ticker = tickerPath(coin);
   try {
     const res = await fetch(
-      `https://api.cryptapi.io/${ticker}/convert/?value=${encodeURIComponent(usd)}&from=USD`,
+      `${CRYPTAPI_API_BASE}/${ticker}/convert/?value=${encodeURIComponent(usd)}&from=USD`,
       { signal: AbortSignal.timeout(10000) },
     );
     if (!res.ok) return null;
@@ -77,10 +83,10 @@ export function tickerFor(coin: string): string {
 export async function createCharge(params: CreateChargeParams): Promise<Charge> {
   const { coin, payoutAddress, callbackUrl, confirmations = 1 } = params;
   if (!payoutAddress) throw new Error(`no payout wallet configured for coin ${coin}`);
-  const ticker = tickerFor(coin).split("/").map(encodeURIComponent).join("/");
+  const ticker = tickerPath(coin);
   let url: URL;
   try {
-    url = new URL(`https://api.cryptapi.io/${ticker}/create/`);
+    url = new URL(`${CRYPTAPI_API_BASE}/${ticker}/create/`);
   } catch {
     throw new Error(`invalid gateway ticker for coin ${coin}`);
   }
@@ -118,6 +124,110 @@ export function acceptedCoins(): string[] {
 
 export function payoutWalletFor(coin: string): string | undefined {
   return process.env[`CRYPTAPI_WALLETS_${coin.toUpperCase()}`];
+}
+
+/** Encode a coin id into a ticker path ("trc20_usdt" -> "trc20/usdt"). */
+function tickerPath(coin: string): string {
+  return tickerFor(coin).split("/").map(encodeURIComponent).join("/");
+}
+
+/**
+ * Parse the USD value out of a CryptAPI convert payload
+ * (the JSON-encoded `value_coin_convert` / `value_forwarded_coin_convert`
+ * query params). Returns whole USD cents, or null when absent/malformed.
+ */
+export function usdCentsFromConvertJson(raw: string | null): number | null {
+  if (!raw) return null;
+  try {
+    const conv = JSON.parse(raw) as Record<string, string>;
+    const usd = Number(conv.USD);
+    return Number.isFinite(usd) && usd > 0 ? Math.round(usd * 100) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the deposit QR code (base64 PNG data URL) for a payment address.
+ * Returns null on any failure — the portal still shows the address.
+ */
+export async function getQrcode(coin: string, addressIn: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${apiBase()}/${tickerPath(coin)}/qrcode/?address=${encodeURIComponent(addressIn)}&size=300`,
+      { signal: AbortSignal.timeout(10000) },
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as { qr_code?: string };
+    return body?.qr_code ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export interface GatewayCallbackLog {
+  txidIn: string | null;
+  /** CryptAPI's own result field: "pending" | "sent" | "done". */
+  result: string;
+  /** Amount the customer sent, in coin units (0 when unknown). */
+  valueCoin: number;
+  /** The exact callback URL of the most recent webhook attempt (query params include uuid + convert data). */
+  requestUrl: string | null;
+}
+
+/**
+ * Fetch callback/payment logs for an address from the CryptAPI logs endpoint.
+ * Used to reconcile purchases whose webhook was lost. Returns null on any
+ * failure (treated as "no data, leave pending").
+ */
+export async function getGatewayLogs(coin: string, callbackUrl: string): Promise<GatewayCallbackLog[] | null> {
+  try {
+    const url = `${apiBase()}/${tickerPath(coin)}/logs/?callback=${encodeURIComponent(callbackUrl)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      status?: string;
+      callbacks?: Array<{
+        txid_in?: string;
+        result?: string;
+        value_coin?: number | string;
+        logs?: Array<{ request_url?: string }>;
+      }>;
+    };
+    if (body.status !== "success" || !Array.isArray(body.callbacks)) return null;
+    return body.callbacks.map((c) => {
+      const requestUrl = c.logs?.[0]?.request_url ?? null;
+      return {
+        txidIn: c.txid_in ?? null,
+        result: String(c.result ?? ""),
+        valueCoin: Number.isFinite(Number(c.value_coin)) ? Number(c.value_coin) : 0,
+        requestUrl,
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Convert a coin amount to USD via the global CryptAPI convert endpoint.
+ * Returns null on any failure. Fallback for reconciliation when the logged
+ * webhook URL carries no convert data.
+ */
+export async function coinToUsd(coin: string, value: number): Promise<number | null> {
+  if (!Number.isFinite(value) || value <= 0) return null;
+  try {
+    const res = await fetch(
+      `${apiBase()}/convert/?value=${encodeURIComponent(value)}&from=${encodeURIComponent(tickerFor(coin))}&to=usd`,
+      { signal: AbortSignal.timeout(10000) },
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as { value_coin?: number | string };
+    const usd = Number(body.value_coin);
+    return Number.isFinite(usd) && usd > 0 ? usd : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

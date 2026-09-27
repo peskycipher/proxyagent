@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "proxy-agent",
-  "main": ".open-next/worker.js",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
@@ -13,6 +13,20 @@
       "binding": "DB",
       "database_name": "proxy-agent-db",
       "database_id": "bb726e2e-e54b-4892-982a-dd3e6ef7f62b"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "POD_CONTROLLER",
+        "class_name": "PodController"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["PodController"]
     }
   ],
   "vars": {

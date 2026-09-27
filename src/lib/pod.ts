@@ -1,39 +1,43 @@
-import { getPod, startPod, stopPod, llamaHealthy } from "@/lib/runpod";
-import { logger } from "@/lib/logger";
+import { podControl } from "@/lib/pod/control";
+import { llamaHealthy } from "@/lib/runpod";
 
 /**
  * Pod lifecycle: ensure running before a chat request, auto-stop after idle.
+ *
+ * Lifecycle *decisions* (start / idle-stop) live in the PodController durable
+ * object via the driver in ./control; this module keeps only what is
+ * inherently request-local: the warmup health-poll loop with SSE progress
+ * reporting, and thin wrappers over the driver for the chat route.
  */
 
-const IDLE_TIMEOUT_MS = () => Number(process.env.POD_IDLE_TIMEOUT_SECONDS || 600) * 1000;
 const WARMUP_TIMEOUT_MS = () => Number(process.env.POD_WARMUP_TIMEOUT_SECONDS || 300) * 1000;
 
-let lastActivityAt = 0;
-let idleStopperStarted = false;
-
-export function touchPodActivity(): void {
-  lastActivityAt = Date.now();
-  if (!idleStopperStarted) startIdleStopper();
-}
-
-export function idleSeconds(): number {
-  return lastActivityAt === 0 ? 0 : Math.floor((Date.now() - lastActivityAt) / 1000);
-}
-
-/** Ensures the pod is running and llama-server is healthy; reports progress via onStatus. */
-export async function ensurePodUp(onStatus?: (msg: string) => void): Promise<void> {
+/**
+ * Ensures the pod is running and llama-server is healthy; reports progress via
+ * onStatus. Resolves only once llama-server answers /health — a pod that is
+ * merely RUNNING but still loading model weights is not "up".
+ * `signal` is the client's disconnect signal: an abandoning user stops the
+ * warmup poll (and releases the chat lock) instead of holding it for the full
+ * warmup timeout.
+ */
+export async function ensurePodUp(
+  onStatus?: (msg: string) => void,
+  signal?: AbortSignal,
+): Promise<void> {
   touchPodActivity();
-  const pod = await getPod();
-  if (pod.status === "ERROR") {
+  const result = await podControl().ensureRunning();
+  if (result === "error") {
     throw new Error("pod is in ERROR state on Runpod — check the Runpod console");
   }
-  if (pod.status !== "RUNNING") {
+  if (result === "starting") {
     onStatus?.("pod_starting");
-    await startPod();
   }
   const deadline = Date.now() + WARMUP_TIMEOUT_MS();
   // llama-server boot takes a while (model weights loading); poll health.
   for (;;) {
+    if (signal?.aborted) {
+      throw new Error("client disconnected during pod warmup");
+    }
     if (await llamaHealthy()) {
       onStatus?.("ready");
       return;
@@ -46,26 +50,20 @@ export async function ensurePodUp(onStatus?: (msg: string) => void): Promise<voi
   }
 }
 
-/** Auto-stops the pod after the idle timeout (operator cost control). */
-function startIdleStopper(): void {
-  idleStopperStarted = true;
-  const timer = setInterval(async () => {
-    try {
-      if (lastActivityAt === 0) return;
-      if (Date.now() - lastActivityAt < IDLE_TIMEOUT_MS()) return;
-      const pod = await getPod();
-      if (pod.status === "RUNNING") {
-        await stopPod();
-        logger.info("pod stopped after idle timeout");
-      }
-      clearInterval(timer);
-      idleStopperStarted = false;
-    } catch (e) {
-      logger.error("idle stopper error", { error: (e as Error).message });
-    }
-  }, 30_000);
-  // don't hold the process open in dev
-  if (typeof timer.unref === "function") timer.unref();
+/** Records activity (and refreshes the idle alarm via the controller). */
+export function touchPodActivity(): void {
+  void podControl().touchActivity();
+}
+
+/** Register/refresh/release this user's stream lease with the controller. */
+export function beginPodStream(userId: string): void {
+  void podControl().beginStream(userId);
+}
+export function renewPodStream(userId: string): void {
+  void podControl().renewStream(userId);
+}
+export function endPodStream(userId: string): void {
+  void podControl().endStream(userId);
 }
 
 export function sleep(ms: number): Promise<void> {

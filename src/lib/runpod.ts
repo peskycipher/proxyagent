@@ -12,10 +12,17 @@
 
 const API_BASE = "https://api.runpod.io/v2";
 
-export interface PodState {
-  desiredStatus: string;
-  runtimeStatus: string | null;
-  actions: string[];
+/** Error carrying the Runpod API status code, so callers can branch on it. */
+export class RunpodError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "RunpodError";
+  }
+}
+
+/** True when the error is a 409 conflict — an invalid/already-applied transition. */
+export function isConflict(e: unknown): boolean {
+  return e instanceof RunpodError && e.status === 409;
 }
 
 function apiKey(): string {
@@ -31,7 +38,7 @@ function podId(): string {
 }
 
 async function runpodFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`${API_BASE}/pods/${podId()}${path ?? ""}`, {
+  return fetch(`${API_BASE}/pods/${podId()}${path}`, {
     ...init,
     headers: { Authorization: `Bearer ${apiKey()}`, ...(init?.headers ?? {}) },
     signal: AbortSignal.timeout(20000),
@@ -40,7 +47,7 @@ async function runpodFetch(path: string, init?: RequestInit): Promise<Response> 
 
 export async function getPod(): Promise<{ status: string; runtimeStatus: string | null; actions: string[] }> {
   const res = await runpodFetch("");
-  if (!res.ok) throw new Error(`getPod failed: ${res.status}`);
+  if (!res.ok) throw new RunpodError(`getPod failed: ${res.status} ${await res.text().catch(() => "")}`, res.status);
   const body = (await res.json()) as { status?: string; runtimeStatus?: string; actions?: string[] };
   return {
     status: body.status ?? "UNKNOWN",
@@ -55,7 +62,7 @@ export async function startPod(): Promise<void> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ action: "start" }),
   });
-  if (!res.ok) throw new Error(`startPod failed: ${res.status} ${await res.text().catch(() => "")}`);
+  if (!res.ok) throw new RunpodError(`startPod failed: ${res.status} ${await res.text().catch(() => "")}`, res.status);
 }
 
 export async function stopPod(): Promise<void> {
@@ -64,7 +71,7 @@ export async function stopPod(): Promise<void> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ action: "stop" }),
   });
-  if (!res.ok) throw new Error(`stopPod failed: ${res.status} ${await res.text().catch(() => "")}`);
+  if (!res.ok) throw new RunpodError(`stopPod failed: ${res.status} ${await res.text().catch(() => "")}`, res.status);
 }
 
 /** llama.cpp llama-server health check. */

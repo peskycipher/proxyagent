@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { auth } from "@/auth";
 import { balanceSeconds, debit } from "@/lib/credits";
-import { ensurePodUp, touchPodActivity } from "@/lib/pod";
+import { ensurePodUp, touchPodActivity, beginPodStream, renewPodStream, endPodStream } from "@/lib/pod";
 import { Meter } from "@/lib/meter";
 import { getDb, newId } from "@/lib/db";
 import {
@@ -81,6 +81,7 @@ export async function POST(req: Request) {
             if (!held) logger.error("chat lock lost mid-stream", { userId });
           })
           .catch((e) => logger.error("chat lock renew failed", { userId, error: (e as Error).message }));
+        renewPodStream(userId); // keep the pod-controller stream lease alive
       }, CHAT_LOCK_RENEW_INTERVAL_MS);
 
       const cleanup = async () => {
@@ -105,6 +106,7 @@ export async function POST(req: Request) {
         // Release the lock even when billing failed above — a stuck lock would
         // block this user's next message until the TTL lapses.
         clearInterval(heartbeat);
+        endPodStream(userId);
         try {
           await releaseChatLock(userId);
         } catch (e) {
@@ -114,8 +116,12 @@ export async function POST(req: Request) {
       };
 
       try {
+        // Register the stream with the pod controller (idle-stop lease) for
+        // the whole request, including warmup.
+        beginPodStream(userId);
+
         // 1) Pod warmup with live status events (pod start can take minutes).
-        await ensurePodUp((msg) => send("status", { status: msg }));
+        await ensurePodUp((msg) => send("status", { status: msg }), aborter.signal);
 
         // 2) Stream from llama-server (OpenAI-compatible /v1/chat/completions).
         const upstreamRes = await fetch(`${LLAMA_BASE()}/v1/chat/completions`, {

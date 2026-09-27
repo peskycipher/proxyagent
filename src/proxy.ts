@@ -18,5 +18,5 @@ export default proxy((req) => {
 });
 
 export const config = {
-  matcher: ["/chat/:path*", "/portal/:path*", "/api/chat/:path*", "/api/purchases/:path*", "/api/chats/:path*", "/api/me/:path*"],
+  matcher: ["/chat/:path*", "/portal/:path*", "/api/chat/:path*", "/api/purchases/:path*", "/api/chats/:path*", "/api/me/:path*", "/api/fx/:path*"],
 };

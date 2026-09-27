@@ -116,6 +116,30 @@ export async function createCharge(params: CreateChargeParams): Promise<Charge> 
 }
 
 /**
+ * Convert a USD amount to a supported FIAT currency via the global CryptAPI
+ * convert endpoint (docs/convert.md — rates refreshed every 5 minutes).
+ * Returns null on any failure — callers fall back to the USD display.
+ */
+export async function convertFiat(usd: number, to: string): Promise<number | null> {
+  if (!Number.isFinite(usd) || usd <= 0) return null;
+  try {
+    const res = await fetch(
+      `${apiBase()}/convert/?value=${encodeURIComponent(usd)}&from=usd&to=${encodeURIComponent(to.toLowerCase())}`,
+      { signal: AbortSignal.timeout(10000) },
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as { value_coin?: number | string };
+    const v = Number(body.value_coin);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Display currencies for the portal price selector (subset of docs/convert.md). */
+export const FIAT_CURRENCIES = ["USD", "EUR", "GBP", "CAD", "JPY", "AUD", "CHF", "CNY", "INR"] as const;
+
+/**
  * Optional CryptAPI sender-IP allowlist (docs/how-webhooks-work.md#best-practices:
  * whitelist 51.77.105.132 and 135.125.112.47). Enforcement is opt-in: when
  * CRYPTAPI_ALLOWED_IPS is set (comma-separated), only requests from those IPs

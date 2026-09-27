@@ -120,3 +120,36 @@ describe("senderIpAllowed (optional CryptAPI sender-IP allowlist)", () => {
     expect(gateway.senderIpAllowed(null)).toBe(false);
   });
 });
+
+describe("convertFiat (USD -> display currency)", () => {
+  let gateway: typeof import("@/lib/gateway");
+
+  beforeEach(async () => {
+    gateway = await import("@/lib/gateway");
+  });
+
+  it("converts USD to the requested fiat via the global convert endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ value_coin: "0.92" }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      expect(await gateway.convertFiat(3.02, "EUR")).toBeCloseTo(0.92, 10);
+      expect(fetchMock.mock.calls[0][0]).toContain("/convert/?value=3.02&from=usd&to=eur");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("returns null on failure or invalid input", async () => {
+    const fetchMock = vi.fn(async () => new Response("error", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      expect(await gateway.convertFiat(10, "EUR")).toBeNull();
+      expect(await gateway.convertFiat(0, "EUR")).toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(1); // invalid input never fetches
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

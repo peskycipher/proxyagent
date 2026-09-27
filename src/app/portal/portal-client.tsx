@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { iconFor } from "@/lib/coin-icons";
@@ -31,11 +31,26 @@ interface PastPurchase {
   createdAt: number;
 }
 
+/** Display currencies for prices (CryptAPI-supported fiat, docs/convert.md). */
+const CURRENCIES = [
+  { code: "USD", symbol: "$" },
+  { code: "EUR", symbol: "€" },
+  { code: "GBP", symbol: "£" },
+  { code: "CAD", symbol: "C$" },
+  { code: "JPY", symbol: "¥" },
+  { code: "AUD", symbol: "A$" },
+  { code: "CHF", symbol: "CHF " },
+  { code: "CNY", symbol: "CN¥" },
+  { code: "INR", symbol: "₹" },
+] as const;
+
 function fmt(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
-  return h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 /** Coin id -> display label: "trc20_usdt" -> "TRC20 USDT", "btc" -> "BTC". */
@@ -66,6 +81,10 @@ export default function PortalClient({
   const [copied, setCopied] = useState<"address" | "amount" | null>(null);
   /** Terminal settle outcome of the last active purchase: "underpaid" | "expired". */
   const [settle, setSettle] = useState<"underpaid" | "expired" | null>(null);
+  /** Display currency for prices; rate = how many CUR one USD buys. */
+  const [currency, setCurrency] = useState<string>("USD");
+  const [rate, setRate] = useState<number | null>(1);
+  const ratesRef = useRef<Record<string, number | null>>({});
 
   const settleMessage: Record<"underpaid" | "expired", string> = {
     underpaid: "Payment received was below the purchase price, so no credits were added. A new payment address is needed to try again.",
@@ -80,6 +99,42 @@ export default function PortalClient({
   }
 
   const selectedTier = useMemo(() => tiers.find((t) => t.hours === selectedHours), [tiers, selectedHours]);
+
+  /** Price in the selected display currency; USD fallback while loading/unavailable. */
+  function fmtPrice(cents: number): string {
+    if (currency === "USD" || rate === null) return `$${(cents / 100).toFixed(2)}`;
+    const symbol = CURRENCIES.find((c) => c.code === currency)?.symbol ?? "";
+    return `${symbol}${(rate * (cents / 100)).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  }
+
+  // Load the USD -> currency rate (per-portal cache) whenever the selection changes.
+  useEffect(() => {
+    if (currency === "USD") {
+      setRate(1);
+      return;
+    }
+    const cached = ratesRef.current[currency];
+    if (cached !== undefined) {
+      setRate(cached);
+      return;
+    }
+    let cancelled = false;
+    setRate(null); // loading: show USD until the rate lands
+    fetch(`/api/fx?amount=1&to=${encodeURIComponent(currency)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b: { value?: number } | null) => {
+        const v = b && Number.isFinite(Number(b.value)) && Number(b.value) > 0 ? Number(b.value) : null;
+        ratesRef.current[currency] = v;
+        if (!cancelled) setRate(v);
+      })
+      .catch(() => {
+        ratesRef.current[currency] = null;
+        if (!cancelled) setRate(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currency]);
 
   // Poll the active purchase until confirmed (CryptAPI webhook credits seconds).
   useEffect(() => {
@@ -135,7 +190,7 @@ export default function PortalClient({
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <a className="btn" href="/chat">Chat</a>
-          <button className="btn" onClick={() => void signOut({ callbackUrl: "/" })}>Sign out</button>
+          <button type="button" className="btn" onClick={() => void signOut({ callbackUrl: "/" })}>Sign out</button>
         </div>
       </div>
 
@@ -147,7 +202,24 @@ export default function PortalClient({
       </div>
 
       <div className="panel" style={{ padding: 20, marginBottom: 20 }}>
-        <h2 style={{ marginTop: 0 }}>Buy time credits</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          <h2 style={{ margin: 0 }}>Buy time credits</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <label className="muted" htmlFor="currency-select">Currency</label>
+            <select
+              id="currency-select"
+              className="input"
+              style={{ width: "auto" }}
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              aria-label="Display currency for prices"
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c.code} value={c.code}>{c.code}</option>
+              ))}
+            </select>
+          </div>
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
           {tiers.map((t) => {
             const selected = selectedHours === t.hours;
@@ -175,7 +247,7 @@ export default function PortalClient({
                 <span>
                   {t.hours}h {t.discount > 0 && <span className="muted">({Math.round((1 - t.discount) * 100)}% of base)</span>}
                 </span>
-                <span style={{ fontWeight: 600 }}>${(t.cents / 100).toFixed(2)}</span>
+                <span style={{ fontWeight: 600 }}>{fmtPrice(t.cents)}</span>
               </button>
             );
           })}
@@ -218,7 +290,7 @@ export default function PortalClient({
             </div>
           )}
           {selectedTier && (
-            <button className="btn btn-primary" style={{ marginTop: 16, width: "100%" }} onClick={buy} disabled={busy || coins.length === 0}>
+            <button type="button" className="btn btn-primary" style={{ marginTop: 16, width: "100%" }} onClick={buy} disabled={busy || coins.length === 0}>
               {busy ? "Creating…" : `Buy ${selectedHours}h — $${(selectedTier.cents / 100).toFixed(2)} in ${coinLabel(coin)}`}
             </button>
           )}
@@ -276,9 +348,30 @@ export default function PortalClient({
                       onClick={() => copyToClipboard(String(active.coinAmount), "amount")}
                     >
                       {copied === "amount" ? "Copied!" : "Copy"}
-                    </button>
+                      </button>
+                    </div>
+                  )}
+                  {/* Locked equivalent: the transaction's amount in the selected
+                      display currency. Read-only by design — the coin amount is
+                      what the customer transfers; this is its fiat value. */}
+                  <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="muted">Equivalent ({currency}):</span>
+                    <input
+                      className="input"
+                      type="text"
+                      readOnly
+                      aria-readonly="true"
+                      aria-label={`Transaction equivalent in ${currency}`}
+                      value={fmtPrice(active.amountUsdCents)}
+                      style={{ width: 150, background: "var(--bg)", color: "var(--muted)", cursor: "default" }}
+                    />
+                    {/* nerd-fonts symbol: cod-lock — SVG asset: public/icons/nf-cod-lock.svg */}
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style={{ flexShrink: 0, color: "var(--muted)" }}>
+                      <path d="M8 9C8.55228 9 9 9.44771 9 10C9 10.5523 8.55228 11 8 11C7.44772 11 7 10.5523 7 10C7 9.44771 7.44772 9 8 9Z" />
+                      <path d="M11.5 6H12C12.5523 6 13 6.44771 13 7V12C13 12.5523 12.5523 13 12 13H4C3.44771 13 3 12.5523 3 12V7C3 6.44771 3.44772 6 4 6H4.5V5C4.5 3.61929 5.61929 2.5 7 2.5H8C9.38071 2.5 10.5 3.61929 10.5 5V6H11.5Z" fillRule="evenodd" clipRule="evenodd" opacity="0" />
+                      <path d="M5 6V4.5C5 3.11929 6.11929 2 7.5 2H8.5C9.88071 2 11 3.11929 11 4.5V6H12C12.5523 6 13 6.44772 13 7V12C13 12.5523 12.5523 13 12 13H4C3.44772 13 3 12.5523 3 12V7C3 6.44772 3.44772 6 4 6H5ZM7.5 3C6.67157 3 6 3.67157 6 4.5V6H10V4.5C10 3.67157 9.32843 3 8.5 3H7.5ZM4 7V12H12V7H4ZM8 9C8.55228 9 9 9.44771 9 10C9 10.5523 8.55228 11 8 11C7.44772 11 7 10.5523 7 10C7 9.44771 7.44772 9 8 9Z" />
+                    </svg>
                   </div>
-                )}
                 {typeof active.minimumTransactionCoin === "number" && (
                   <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8, background: "var(--bg)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
                     {/* nerd-fonts symbol: cod-warning — SVG asset: public/icons/nf-cod-warning.svg */}
@@ -294,7 +387,7 @@ export default function PortalClient({
               </div>
             </div>
             <div className="muted" style={{ marginTop: 8 }}>
-              Price: ${(active.amountUsdCents / 100).toFixed(2)} for {fmt(active.seconds)}. Credits appear automatically
+              Price: {fmtPrice(active.amountUsdCents)} for {fmt(active.seconds)}. Credits appear automatically
               after blockchain confirmation — this page updates on its own.
             </div>
           </div>

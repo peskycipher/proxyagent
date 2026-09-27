@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Portal**
+  - Display-currency selector (USD/EUR/GBP/CAD/JPY/AUD/CHF/CNY/INR) above the tier grid; tier prices, payment-panel price line and the new locked equivalent field all re-render in the selected currency via CryptAPI's convert endpoint (new session-gated `/api/fx`, per-currency rate cache, USD fallback while loading/unavailable).
+  - Payment panel: a locked (read-only) field below "Amount to transfer" shows the transaction equivalent in the selected currency, marked with a nerd-fonts `cod-lock` SVG.
+
 - **Chat & billing (review fixes)**
   - Streaming stop-loss: a chat stream can never bill more than the balance held when the model request began — the upstream read is aborted at that point and actual usage is billed, so accounts can no longer overdraft (previously the end-of-stream debit threw and was skipped, leaving free overage).
   - Model-context budget: chat history sent to the model is capped (default last 40 messages / 24k chars; `CHAT_HISTORY_MAX_MESSAGES`, `CHAT_HISTORY_MAX_CHARS`), newest-wins, current message always kept.

@@ -1,8 +1,16 @@
 import { z } from "zod";
 import { auth } from "@/auth";
 import { balanceSeconds, debit } from "@/lib/credits";
-import { ensurePodUp, touchPodActivity, beginPodStream, renewPodStream, endPodStream } from "@/lib/pod";
+import {
+  ensureModelUp,
+  modelChat,
+  touchModelActivity,
+  beginModelStream,
+  renewModelStream,
+  endModelStream,
+} from "@/lib/inference";
 import { Meter } from "@/lib/meter";
+import { pauseStream, resumeStream } from "@/lib/chat-presence";
 import { getDb, newId } from "@/lib/db";
 import {
   acquireChatLock,
@@ -17,12 +25,6 @@ const bodySchema = z.object({
   chatId: z.string().min(1).optional(),
   message: z.string().min(1).max(16000),
 });
-
-const LLAMA_BASE = () => (process.env.LLAMA_SERVER_URL || "").replace(/\/$/, "");
-
-function llamaHeaders(): Record<string, string> {
-  return { "content-type": "application/json", ...(process.env.LLAMA_API_KEY ? { Authorization: `Bearer ${process.env.LLAMA_API_KEY}` } : {}) };
-}
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -92,7 +94,7 @@ export async function POST(req: Request) {
             if (!held) logger.error("chat lock lost mid-stream", { userId });
           })
           .catch((e) => logger.error("chat lock renew failed", { userId, error: (e as Error).message }));
-        renewPodStream(userId); // keep the pod-controller stream lease alive
+        renewModelStream(userId); // keep the pod-controller stream lease alive (runpod only)
       }, CHAT_LOCK_RENEW_INTERVAL_MS);
 
       const cleanup = async () => {
@@ -104,6 +106,9 @@ export async function POST(req: Request) {
           if (billed > 0) {
             await debit(userId, billed, `chat:${effectiveChatId}`);
           }
+          // Unfreeze the page-open clock at now() — stream time was billed by
+          // the stream meter above, so no window is charged twice.
+          await resumeStream(userId, Date.now());
           if (assistantContent) {
             await db.run(
               "INSERT INTO messages (id, chat_id, role, content, billed_seconds, created_at) VALUES (?,?,?,?,?,?)",
@@ -118,7 +123,7 @@ export async function POST(req: Request) {
         // Release the lock even when billing failed above — a stuck lock would
         // block this user's next message until the TTL lapses.
         clearInterval(heartbeat);
-        endPodStream(userId);
+        endModelStream(userId);
         try {
           await releaseChatLock(userId);
         } catch (e) {
@@ -130,18 +135,13 @@ export async function POST(req: Request) {
       try {
         // Register the stream with the pod controller (idle-stop lease) for
         // the whole request, including warmup.
-        beginPodStream(userId);
+        beginModelStream(userId);
 
-        // 1) Pod warmup with live status events (pod start can take minutes).
-        await ensurePodUp((msg) => send("status", { status: msg }), aborter.signal);
+        // 1) Model warmup with live status events (pod start can take minutes).
+        await ensureModelUp((msg) => send("status", { status: msg }), aborter.signal);
 
-        // 2) Stream from llama-server (OpenAI-compatible /v1/chat/completions).
-        const upstreamRes = await fetch(`${LLAMA_BASE()}/v1/chat/completions`, {
-          method: "POST",
-          headers: llamaHeaders(),
-          body: JSON.stringify({ stream: true, messages: history }),
-          signal: aborter.signal,
-        });
+        // 2) Stream from the active provider (OpenAI-compatible /v1/chat/completions).
+        const upstreamRes = await modelChat(history, aborter.signal);
         if (!upstreamRes.ok || !upstreamRes.body) {
           logger.error("model upstream error", { chatId: effectiveChatId, status: upstreamRes.status });
           send("error", { message: `model upstream error ${upstreamRes.status}` });
@@ -153,6 +153,8 @@ export async function POST(req: Request) {
 
         // Billing starts here — warmup time is free for the user.
         meter = new Meter();
+        // Freeze the page-open meter: the stream meter owns these seconds.
+        pauseStream(userId);
 
         const reader = upstreamRes.body.getReader();
         const decoder = new TextDecoder();
@@ -160,7 +162,7 @@ export async function POST(req: Request) {
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
-          touchPodActivity();
+          touchModelActivity();
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
           buffer = lines.pop() ?? "";

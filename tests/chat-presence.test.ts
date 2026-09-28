@@ -105,3 +105,11 @@ describe("chat-presence", () => {
     expect(bal).toBe(100 - 5); // bills only the post-stream window
   });
 });
+describe("chat-presence API route", () => {
+  it("POST handler auths, ticks presence, maps insufficient credits to 402", async () => {
+    const src = (await import("node:fs")).readFileSync("src/app/api/chat-presence/route.ts", "utf8");
+    expect(src).toMatch(/export async function POST/);
+    expect(src).toMatch(/openTick\(userId, Date\.now\(\)\)/);
+    expect(src).toMatch(/status: 402/);
+  });
+});

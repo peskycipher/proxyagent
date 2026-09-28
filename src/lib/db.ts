@@ -139,7 +139,11 @@ function ensureD1Schema(d1: D1Like): Promise<unknown> {
  * before the column existed. Duplicate-column errors are tolerated (the column
  * already exists from SCHEMA on fresh databases).
  */
-const MIGRATIONS = ["ALTER TABLE purchases ADD COLUMN nonce TEXT"];
+const MIGRATIONS = [
+  "ALTER TABLE purchases ADD COLUMN nonce TEXT",
+  // Page-open metering clock (ms timestamp of last presence billing tick).
+  "ALTER TABLE users ADD COLUMN open_billed_at INTEGER",
+];
 
 function applyD1Migrations(d1: D1Like): Promise<unknown> {
   return Promise.all(
@@ -184,6 +188,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   balance_seconds INTEGER NOT NULL DEFAULT 0 CHECK (balance_seconds >= 0),
+  open_billed_at INTEGER,
   created_at INTEGER NOT NULL
 );
 

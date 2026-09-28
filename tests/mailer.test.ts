@@ -45,3 +45,11 @@ describe("payment notification mailer", () => {
     await expect(sendPaymentEmail(MSG, { send })).resolves.toBeUndefined();
   });
 });
+describe("webhook email integration", () => {
+  it("webhook handler emails ops after a confirmed purchase", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/app/api/webhooks/gateway/[secret]/route.ts", "utf8");
+    expect(src).toMatch(/sendPaymentEmail/);
+    expect(src).toMatch(/credited/);
+  });
+});

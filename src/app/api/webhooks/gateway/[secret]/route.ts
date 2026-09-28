@@ -1,5 +1,6 @@
 import { getGatewayPubKey, senderIpAllowed, usdCentsFromConvertJson, verifyWebhookSignature } from "@/lib/gateway";
 import { confirmPurchase, getPurchase } from "@/lib/purchases";
+import { sendPaymentEmail } from "@/lib/mailer";
 import { logger } from "@/lib/logger";
 
 /**
@@ -100,7 +101,19 @@ async function handle(req: Request, { params }: { params: Promise<{ secret: stri
       usdCentsFromConvertJson(fields.get("value_coin_convert")) ??
       usdCentsFromConvertJson(fields.get("value_forwarded_coin_convert")) ??
       undefined;
-    await confirmPurchase(invoiceId, uuid, receivedUsdCents);
+    const result = await confirmPurchase(invoiceId, uuid, receivedUsdCents);
+    if (result?.credited) {
+      // Best-effort ops notification; never blocks the "*ok*" answer.
+      const purchase = await getPurchase(invoiceId);
+      if (purchase) {
+        await sendPaymentEmail({
+          purchaseId: purchase.id,
+          coin: purchase.coin,
+          seconds: purchase.seconds,
+          amountUsdCents: purchase.amount_usd_cents,
+        });
+      }
+    }
   }
   // pending=1 callbacks only acknowledge detection; no crediting.
 

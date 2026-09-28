@@ -298,7 +298,7 @@ export default function PortalClient({
         {active && (
           <div className="panel" style={{ padding: 16, marginTop: 16 }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>Send payment to:</div>
-            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+            <div className="pay-flex">
               {active.qrCode && (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
@@ -306,6 +306,7 @@ export default function PortalClient({
                   alt="Payment QR code"
                   width={240}
                   height={240}
+                  className="qr-img"
                   style={{ borderRadius: 8, border: "1px solid var(--border)" }}
                 />
               )}
@@ -330,9 +331,9 @@ export default function PortalClient({
                   </button>
                 </div>
                 {typeof active.coinAmount === "number" && (
-                  <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "180px 1fr", gap: 8, alignItems: "center" }}>
+                  <div className="amount-row" style={{ marginTop: 10 }}>
                     <span className="muted">Amount to transfer:</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div className="amount-value">
                       <code style={{ background: "var(--bg)", padding: "6px 10px", borderRadius: 8 }}>
                         ≈ {active.coinAmount.toLocaleString("en-US", { maximumFractionDigits: 8 })} {coin.toUpperCase()}
                       </code>
@@ -357,9 +358,9 @@ export default function PortalClient({
                     what the customer transfers; this is its fiat value. Shares
                     the 180px label column with the row above, so both amount
                     fields start at the same left edge. */}
-                <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "180px 1fr", gap: 8, alignItems: "center" }}>
+                <div className="amount-row" style={{ marginTop: 8 }}>
                   <span className="muted">Equivalent ({currency}):</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div className="amount-value">
                     <input
                       className="input"
                       type="text"
@@ -416,7 +417,7 @@ export default function PortalClient({
         {purchases.length === 0 ? (
           <div className="muted">No purchases yet.</div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="purchases" style={{ width: "100%", borderCollapse: "collapse" }}>
             <tbody>
               {purchases.map((p) => (
                 <tr key={p.id}>

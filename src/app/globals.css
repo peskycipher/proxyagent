@@ -140,6 +140,12 @@ input, textarea { font: inherit; }
   .chat-shell.sidebar-open .chat-backdrop { display: block; }
 }
 
+/* Portal payment panel rows (inline values moved to classes so the
+   breakpoints can restack them without fighting inline specificity). */
+.pay-flex { display: flex; gap: 16px; align-items: flex-start; }
+.amount-row { display: grid; grid-template-columns: 180px 1fr; gap: 8px; align-items: center; }
+.amount-value { display: flex; align-items: center; gap: 8px; }
+
 @media (max-width: 560px) {
   /* Portal payment panel: stack QR above address, amount rows single column. */
   .pay-flex { flex-direction: column; align-items: stretch; }

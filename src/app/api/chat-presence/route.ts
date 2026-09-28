@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireUser, unauthorized } from "@/lib/route-session";
 import { openTick } from "@/lib/chat-presence";
 
 /**
@@ -9,9 +9,9 @@ import { openTick } from "@/lib/chat-presence";
  * which the client treats as "redirect to /portal and stop heartbeating".
  */
 export async function POST() {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const userId = session.user.id;
+  const user = await requireUser();
+  if (!user) return unauthorized();
+  const userId = user.id;
 
   try {
     const balanceSeconds = await openTick(userId, Date.now());

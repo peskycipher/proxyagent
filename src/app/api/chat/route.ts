@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { auth } from "@/auth";
+import { requireUser, unauthorized } from "@/lib/route-session";
 import { balanceSeconds, debit } from "@/lib/credits";
 import {
   ensureModelUp,
@@ -27,9 +27,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) return Response.json({ error: "unauthorized" }, { status: 401 });
-  const userId = session.user.id;
+  const user = await requireUser();
+  if (!user) return unauthorized();
+  const userId = user.id;
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "invalid request" }, { status: 400 });

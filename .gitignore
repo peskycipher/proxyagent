@@ -23,3 +23,8 @@ runpod-api-inventory.md
 AGENTS.md
 CLAUDE.md
 .vitest/
+
+# Local agent state & regenerable tooling output
+.agents/
+.claude/
+GRAFT_BLAST.md

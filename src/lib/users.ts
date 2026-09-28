@@ -64,8 +64,37 @@ export async function getUserByEmail(email: string): Promise<{ id: string; email
   return row ?? null;
 }
 
-export async function getUserById(id: string): Promise<{ id: string; email: string; balance_seconds: number } | null> {
+export async function getUserById(id: string): Promise<{ id: string; email: string; balance_seconds: number; avatar: string | null; username: string | null } | null> {
   const row = await (await getDb())
-    .get<{ id: string; email: string; balance_seconds: number }>("SELECT id, email, balance_seconds FROM users WHERE id = ?", id);
+    .get<{ id: string; email: string; balance_seconds: number; avatar: string | null; username: string | null }>("SELECT id, email, balance_seconds, avatar, username FROM users WHERE id = ?", id);
   return row ?? null;
+}
+
+/**
+ * Sets (or clears, with an empty username) the public username. Returns
+ * { ok: false, reason: "taken" } when another user already holds it.
+ */
+export async function setUsername(id: string, username: string): Promise<{ ok: true } | { ok: false; reason: "taken" }> {
+  const db = await getDb();
+  const normalized = username.trim();
+  try {
+    if (normalized) {
+      await db.run("UPDATE users SET username = ? WHERE id = ?", normalized, id);
+    } else {
+      await db.run("UPDATE users SET username = NULL WHERE id = ?", id);
+    }
+  } catch (e) {
+    if (String((e as Error).message).includes("UNIQUE")) return { ok: false, reason: "taken" };
+    throw e;
+  }
+  return { ok: true };
+}
+
+/** Stores a profile picture (a small data URL, already resized client-side). */
+export async function setUserAvatar(id: string, dataUrl: string): Promise<void> {
+  await (await getDb()).run("UPDATE users SET avatar = ? WHERE id = ?", dataUrl, id);
+}
+
+export async function clearUserAvatar(id: string): Promise<void> {
+  await (await getDb()).run("UPDATE users SET avatar = NULL WHERE id = ?", id);
 }

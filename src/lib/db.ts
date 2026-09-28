@@ -143,6 +143,14 @@ const MIGRATIONS = [
   "ALTER TABLE purchases ADD COLUMN nonce TEXT",
   // Page-open metering clock (ms timestamp of last presence billing tick).
   "ALTER TABLE users ADD COLUMN open_billed_at INTEGER",
+  // Profile picture as a small data URL (client resized to ≤128px).
+  "ALTER TABLE users ADD COLUMN avatar TEXT",
+  // Optional public username (unique among set values, case-insensitive).
+  "ALTER TABLE users ADD COLUMN username TEXT",
+  // Uniqueness is enforced only for non-NULL usernames (partial index).
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL",
+  // Provider profile picture URL captured at link time (avatar fallback).
+  "ALTER TABLE linked_accounts ADD COLUMN provider_picture TEXT",
 ];
 
 function applyD1Migrations(d1: D1Like): Promise<unknown> {
@@ -189,6 +197,8 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   balance_seconds INTEGER NOT NULL DEFAULT 0 CHECK (balance_seconds >= 0),
   open_billed_at INTEGER,
+  avatar TEXT,
+  username TEXT,
   created_at INTEGER NOT NULL
 );
 
@@ -239,6 +249,21 @@ CREATE TABLE IF NOT EXISTS chat_locks (
   user_id TEXT PRIMARY KEY REFERENCES users(id),
   expires_at INTEGER NOT NULL
 );
+
+-- OAuth identities linked to a profile (from /chat profile settings). The
+-- (provider, provider_account_id) unique index keeps one provider identity
+-- bound to at most one local user.
+CREATE TABLE IF NOT EXISTS linked_accounts (
+  user_id TEXT NOT NULL REFERENCES users(id),
+  provider TEXT NOT NULL CHECK (provider IN ('google','github')),
+  provider_account_id TEXT NOT NULL,
+  provider_email TEXT,
+  provider_picture TEXT,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, provider)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_linked_provider_account ON linked_accounts(provider, provider_account_id);
 `;
 
 export function newId(prefix: string): string {

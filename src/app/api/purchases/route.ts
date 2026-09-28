@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { requireUser, unauthorized } from "@/lib/route-session";
 import { acceptedCoins, convertUsdToCoin, createCharge, getQrcode, payoutWalletFor } from "@/lib/gateway";
 import { createPurchase, attachCharge } from "@/lib/purchases";
 import { tierFor } from "@/lib/pricing";
@@ -10,8 +10,8 @@ import { randomBytes } from "node:crypto";
 const bodySchema = z.object({ hours: z.number().int(), coin: z.string().regex(/^[a-z0-9_]+$/) });
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser();
+  if (!user) return unauthorized();
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid request" }, { status: 400 });
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   // purchase, store it with the order, and embed it in the callback URL — the
   // webhook handler rejects callbacks whose nonce doesn't match what we stored.
   const nonce = randomBytes(16).toString("hex");
-  const purchase = await createPurchase(session.user.id, hours, coin, nonce);
+  const purchase = await createPurchase(user.id, hours, coin, nonce);
 
   // Unique callback URL (CryptAPI treats it as the charge id) carrying our
   // secret path segment + invoice id + one-time nonce, echoed back in callbacks.
@@ -92,7 +92,7 @@ export async function POST(req: Request) {
 }
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser();
+  if (!user) return unauthorized();
   return NextResponse.json({ coins: acceptedCoins() });
 }

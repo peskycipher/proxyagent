@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireUser, unauthorized } from "@/lib/route-session";
 import { convertFiat, FIAT_CURRENCIES } from "@/lib/gateway";
 
 const ALLOWED = new Set<string>(FIAT_CURRENCIES);
@@ -11,8 +11,8 @@ const ALLOWED = new Set<string>(FIAT_CURRENCIES);
  * GET /api/fx?amount=1&to=EUR -> { value: 0.92 }
  */
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser();
+  if (!user) return unauthorized();
 
   let url: URL;
   try {

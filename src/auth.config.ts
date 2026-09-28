@@ -16,7 +16,17 @@ export const authConfig = {
     },
     session({ session, token }) {
       if (token.uid) {
-        session.user = { ...session.user, id: token.uid as string };
+        // OAuth identity fields carried from sign-in for linked-account
+        // self-healing (see GET /api/me/linked). Spread separately: the
+        // Session.user type in callback position is the @auth/core
+        // AdapterUser intersection, which the module augmentation doesn't
+        // reach — the spread bypasses the excess-property check.
+        const oauthIdentity = {
+          oauthProvider: token.oauthProvider as string | undefined,
+          oauthAccountId: token.oauthAccountId as string | undefined,
+          oauthPicture: (token.oauthPicture as string | null | undefined) ?? undefined,
+        };
+        session.user = { ...session.user, id: token.uid as string, ...oauthIdentity };
       }
       return session;
     },

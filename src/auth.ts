@@ -6,6 +6,7 @@ import GitHub from "next-auth/providers/github";
 import { authConfig } from "@/auth.config";
 import { getUserByEmail, verifyPassword, upsertUserByEmail } from "@/lib/users";
 import { OAuthEmailNotVerifiedError, oauthSignInDecision, oauthVerifiedEmail } from "@/lib/oauth";
+import { clearLinkIntent, providerPictureFromProfile, readLinkIntent, upsertLinkedAccount } from "@/lib/linked-accounts";
 import { turnstileErrorMessage, verifyTurnstileToken } from "@/lib/turnstile";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -45,6 +46,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // distinct, user-visible error code (/login?error=OAuthEmailNotVerified)
     // instead of an anonymous failure. No linking has happened at this point.
     async signIn({ user, account, profile }) {
+      // Explicit "link this provider to MY profile" flow (started from the
+      // chat profile settings): the link-intent cookie carries the signed-in
+      // local user id. Gate on a verified provider email — the same rule as
+      // sign-in linking — then record the identity directly against that user.
+      // On success return true (the session keeps its uid; the signIn()
+      // redirectTo lands the user on /chat?linked=1). On failure redirect back
+      // with a reason the UI can show.
+      const intent = await readLinkIntent();
+      if (intent && account && account.type !== "credentials") {
+        await clearLinkIntent(); // consume it either way
+        if (!/^usr_/.test(intent)) return "/chat?linked=error&reason=session";
+        const verified = await oauthVerifiedEmail(account, user, profile);
+        if (!verified) return "/chat?linked=error&reason=unverified";
+        const linked = await upsertLinkedAccount(intent, account.provider, String(account.providerAccountId), verified, providerPictureFromProfile(profile));
+        if (!linked.ok) return "/chat?linked=error&reason=in-use";
+        return true;
+      }
       const decision = await oauthSignInDecision(account, user, profile);
       if (decision.allow) return true;
       // The deep link survives the deny inside Auth.js's callback-url cookie —
@@ -76,6 +94,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // bypass attempt is identifiable in logs.)
     async jwt({ token, user, account, profile }) {
       if (user) {
+        // Link flow: the signIn callback already recorded the identity against
+        // the cookie's user; keep the session identity instead of re-matching
+        // by provider email (which could point the token at another account).
+        let linkIntent: string | null = null;
+        try {
+          linkIntent = await readLinkIntent();
+        } catch {
+          linkIntent = null;
+        }
+        if (linkIntent && typeof token.uid === "string") return token;
         if (typeof user.id === "string" && user.id.startsWith("usr_")) {
           token.uid = user.id;
         } else if (user.email) {
@@ -83,6 +111,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (!verified) throw new OAuthEmailNotVerifiedError();
           const localId = await upsertUserByEmail(verified);
           if (localId) token.uid = localId;
+        }
+        // Bookkeeping: ordinary OAuth sign-ins refresh the stored provider
+        // identity for the local user this token resolved to (the explicit
+        // link flow wrote its row in the signIn callback).
+        if (
+          account &&
+          account.type !== "credentials" &&
+          account.provider &&
+          account.providerAccountId &&
+          typeof token.uid === "string"
+        ) {
+          // Persist the identity on the token so sessions can self-heal a
+          // missing linked_accounts row later (see GET /api/me/linked).
+          token.oauthProvider = account.provider;
+          token.oauthAccountId = String(account.providerAccountId);
+          token.oauthPicture = providerPictureFromProfile(profile);
+          try {
+            await upsertLinkedAccount(
+              token.uid,
+              account.provider,
+              String(account.providerAccountId),
+              (await oauthVerifiedEmail(account, user, profile)) ?? user.email ?? null,
+              providerPictureFromProfile(profile),
+            );
+          } catch {
+            // Best effort — sign-in must not fail on link bookkeeping.
+          }
         }
       }
       return token;

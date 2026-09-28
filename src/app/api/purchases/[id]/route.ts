@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireUser, unauthorized } from "@/lib/route-session";
 import { getPurchase } from "@/lib/purchases";
 import { reconcilePurchase } from "@/lib/reconcile";
 import { logger } from "@/lib/logger";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser();
+  if (!user) return unauthorized();
   const { id } = await params;
   let purchase = await getPurchase(id);
-  if (!purchase || purchase.user_id !== session.user.id) {
+  if (!purchase || purchase.user_id !== user.id) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
   // Webhook-loss reconciliation (CryptAPI logs endpoint as backup to webhooks):

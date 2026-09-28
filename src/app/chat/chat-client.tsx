@@ -22,6 +22,8 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
   const [status, setStatus] = useState<string | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [error, setError] = useState("");
+  /** Mobile only: whether the chat-list sidebar is slid in (CSS ≤768px). */
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const refreshChats = useCallback(async () => {
@@ -45,6 +47,7 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
     setChatId(id);
     setStreaming(false);
     setStatus(null);
+    setSidebarOpen(false);
     const res = await fetch(`/api/chats/${id}`);
     if (res.ok) {
       const body = (await res.json()) as { messages: Message[] };
@@ -56,6 +59,7 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
     setChatId(null);
     setMessages([]);
     setError("");
+    setSidebarOpen(false);
   }
 
   async function deleteChat(id: string) {
@@ -143,9 +147,11 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
   }
 
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
+    <div className={`chat-shell${sidebarOpen ? " sidebar-open" : ""}`}>
+      {/* Backdrop (mobile only): tap to dismiss the slid-in sidebar. */}
+      <div className="chat-backdrop" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
       {/* Sidebar */}
-      <aside style={{ width: 240, background: "var(--panel)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <aside className="chat-sidebar">
         <div style={{ padding: 12 }}>
           <button className="btn btn-primary" style={{ width: "100%" }} onClick={newChat}>+ New chat</button>
         </div>
@@ -235,7 +241,7 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
             <a href="/portal" className="muted" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               Portal
               {/* nerd-fonts symbol: cod-arrow-right — SVG asset: public/icons/nf-cod-arrow-right.svg */}
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                 <path d="M13.854 8.14576L8.854 3.14576C8.659 2.95076 8.342 2.95076 8.147 3.14576C7.952 3.34076 7.952 3.65776 8.147 3.85276L12.293 7.99876H2.5C2.224 7.99876 2 8.22276 2 8.49876C2 8.77476 2.224 8.99876 2.5 8.99876H12.293L8.147 13.1448C7.952 13.3398 7.952 13.6568 8.147 13.8518C8.245 13.9498 8.373 13.9978 8.501 13.9978C8.629 13.9978 8.757 13.9488 8.855 13.8518L13.855 8.85176C14.05 8.65676 14.05 8.33976 13.855 8.14476L13.854 8.14576Z" />
               </svg>
             </a>
@@ -249,7 +255,7 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
               }}
             >
               {/* nerd-fonts symbol: cod-sign-out — SVG asset: public/icons/nf-cod-sign-out.svg */}
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                 <path d="M10 13.5C10 13.776 9.776 14 9.5 14H4.5C3.119 14 2 12.881 2 11.5V3.5C2 2.119 3.119 1 4.5 1H9.5C9.776 1 10 1.224 10 1.5C10 1.776 9.776 2 9.5 2H4.5C3.672 2 3 2.672 3 3.5V11.5C3 12.328 3.672 13 4.5 13H9.5C9.776 13 10 13.224 10 13.5ZM13.854 7.148L10.854 4.148C10.659 3.953 10.342 3.953 10.147 4.148C9.952 4.343 9.952 4.66 10.147 4.855L12.293 7.001H5.5C5.224 7.001 5 7.225 5 7.501C5 7.777 5.224 8.001 5.5 8.001H12.293L10.147 10.147C9.952 10.342 9.952 10.659 10.147 10.854C10.342 11.049 10.659 11.049 10.854 10.854L13.854 7.854C14.049 7.659 14.049 7.343 13.854 7.148Z" />
               </svg>
               Sign out
@@ -259,7 +265,22 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
       </aside>
 
       {/* Chat column */}
-      <section style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <section className="chat-main">
+        <div className="chat-topbar">
+          <button
+            type="button"
+            className="chat-toggle"
+            aria-label="Toggle chat list"
+            aria-expanded={sidebarOpen}
+            onClick={() => setSidebarOpen((o) => !o)}
+          >
+            {/* nerd-fonts symbol: cod-menu — SVG asset: public/icons/nf-cod-menu.svg */}
+            <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+              <path d="M1.5 3h13a.5.5 0 0 1 0 1h-13a.5.5 0 0 1 0-1Zm0 4.5h13a.5.5 0 0 1 0 1h-13a.5.5 0 0 1 0-1Zm0 4.5h13a.5.5 0 0 1 0 1h-13a.5.5 0 0 1 0-1Z" />
+            </svg>
+          </button>
+          <div style={{ fontWeight: 600 }}>Chat</div>
+        </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 16px" }}>
           <div style={{ maxWidth: 720, margin: "0 auto", display: "grid", gap: 16 }}>
             {messages.length === 0 && (

@@ -76,3 +76,58 @@ input, textarea { font: inherit; }
 .chat-row-del:disabled { cursor: not-allowed; }
 .chat-row:hover .chat-row-del { visibility: visible; }
 .muted { color: var(--muted); font-size: 13px; }
+
+/* ---- Mobile breakpoints (mobile-last: desktop rules above unchanged) ---- */
+
+/* Chat shell + off-canvas sidebar. Desktop: sidebar inline; mobile: slides. */
+.chat-shell { display: flex; height: 100vh; }
+.chat-toggle { display: none; }
+.chat-backdrop { display: none; }
+
+@media (max-width: 768px) {
+  .landing { padding: 40px 16px; }
+  .landing h1 { font-size: 28px; }
+
+  .chat-shell { display: block; height: 100dvh; overflow: hidden; }
+  .chat-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    flex-shrink: 0;
+  }
+  .chat-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    width: 280px;
+    max-width: 85vw;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+  .chat-shell.sidebar-open .chat-sidebar { transform: translateX(0); }
+  .chat-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .chat-shell.sidebar-open .chat-backdrop { display: block; }
+}
+
+@media (max-width: 560px) {
+  /* Portal payment panel: stack QR above address, amount rows single column. */
+  .pay-flex { flex-direction: column; align-items: stretch; }
+  .pay-flex .qr-img { width: 200px; height: 200px; margin: 0 auto; }
+  .amount-row { grid-template-columns: 1fr; gap: 4px; }
+  .amount-row .amount-value { justify-content: flex-start; }
+  .purchases td { padding: 4px 8px 4px 0; font-size: 13px; }
+}

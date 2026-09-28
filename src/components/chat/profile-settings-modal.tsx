@@ -108,7 +108,7 @@ export default function ProfileSettingsModal({
         </div>
         <div className="modal-profile">
           <button type="button" className="avatar-btn avatar-btn-lg" title="Upload picture" onClick={onUploadClick}>
-            {avatarSrc ? <img src={avatarSrc} alt="Profile picture" /> : (userEmail[0] ?? "?").toUpperCase()}
+            {avatarSrc ? <img src={avatarSrc} alt="" /> : (userEmail[0] ?? "?").toUpperCase()}
           </button>
           <span className="muted">
             {uploading ? "Uploading…" : avatar ? "Click the picture to replace it" : avatarSrc ? "Using your linked account's picture" : "Click to upload a picture"}

@@ -45,7 +45,23 @@ export default function ProfilePanel({
   const router = useRouter();
 
   return (
-    <div className="profile-block">
+    <>
+      {/* Countdown: time remaining, in its own section above the profile block. */}
+      <section className="countdown-section">
+        {/* nerd-fonts symbol: cod-watch — SVG asset: public/icons/nf-cod-watch.svg */}
+        <svg className="countdown-icon" width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M12.5 6H12C12 5.282 11.61 4.627 11 4.275V2.5C11 1.673 10.327 1 9.5 1H6.5C5.673 1 5 1.673 5 2.5V4.275C4.39 4.628 4 5.283 4 6V10C4 10.718 4.39 11.373 5 11.725V13.5C5 14.327 5.673 15 6.5 15H9.5C10.327 15 11 14.327 11 13.5V11.725C11.61 11.372 12 10.717 12 10V9H12.5C12.776 9 13 8.776 13 8.5V6.5C13 6.224 12.776 6 12.5 6ZM6 2.5C6 2.224 6.225 2 6.5 2H9.5C9.775 2 10 2.224 10 2.5V4H6V2.5ZM10 13.5C10 13.776 9.775 14 9.5 14H6.5C6.225 14 6 13.776 6 13.5V12H10V13.5ZM11 10C11 10.418 10.731 10.795 10.333 10.937C10.213 10.979 10.104 11 10 11H6C5.896 11 5.787 10.979 5.667 10.937C5.269 10.795 5 10.418 5 10V6C5 5.582 5.269 5.205 5.667 5.063C5.787 5.021 5.896 5 6 5H10C10.104 5 10.213 5.021 10.333 5.063C10.731 5.205 11 5.582 11 6V10Z" />
+        </svg>
+        <div className="countdown-info">
+          <div className="countdown-label">Time left</div>
+          {balance === null ? (
+            <div className="countdown-time muted">balance…</div>
+          ) : (
+            <div className={`countdown-time${balance > 0 ? "" : " spent"}`}>{formatBalance(balance)}</div>
+          )}
+        </div>
+      </section>
+      <div className="profile-block">
       {/* Hidden once per sidebar; triggered from the avatar menu and the modal. */}
       <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={onUploadFile} />
       {/* Profile: avatar (opens the menu) + account + balance */}
@@ -58,21 +74,10 @@ export default function ProfilePanel({
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen((o) => !o)}
         >
-          {avatarSrc ? <img src={avatarSrc} alt="Profile picture" /> : (userEmail[0] ?? "?").toUpperCase()}
+          {avatarSrc ? <img src={avatarSrc} alt="" /> : (userEmail[0] ?? "?").toUpperCase()}
         </button>
         <div className="profile-info">
           <div className="ellipsis">{userEmail}</div>
-          <div className="balance-row">
-            {/* nerd-fonts symbol: cod-watch — SVG asset: public/icons/nf-cod-watch.svg */}
-            <svg className="balance-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M12.5 6H12C12 5.282 11.61 4.627 11 4.275V2.5C11 1.673 10.327 1 9.5 1H6.5C5.673 1 5 1.673 5 2.5V4.275C4.39 4.628 4 5.283 4 6V10C4 10.718 4.39 11.373 5 11.725V13.5C5 14.327 5.673 15 6.5 15H9.5C10.327 15 11 14.327 11 13.5V11.725C11.61 11.372 12 10.717 12 10V9H12.5C12.776 9 13 8.776 13 8.5V6.5C13 6.224 12.776 6 12.5 6ZM6 2.5C6 2.224 6.225 2 6.5 2H9.5C9.775 2 10 2.224 10 2.5V4H6V2.5ZM10 13.5C10 13.776 9.775 14 9.5 14H6.5C6.225 14 6 13.776 6 13.5V12H10V13.5ZM11 10C11 10.418 10.731 10.795 10.333 10.937C10.213 10.979 10.104 11 10 11H6C5.896 11 5.787 10.979 5.667 10.937C5.269 10.795 5 10.418 5 10V6C5 5.582 5.269 5.205 5.667 5.063C5.787 5.021 5.896 5 6 5H10C10.104 5 10.213 5.021 10.333 5.063C10.731 5.205 11 5.582 11 6V10Z" />
-            </svg>
-            {balance !== null ? (
-              <span className={`balance-chip${balance > 0 ? "" : " spent"}`}>{formatBalance(balance)} left</span>
-            ) : (
-              <span className="muted">balance…</span>
-            )}
-          </div>
         </div>
       </div>
       <div className="profile-actions">
@@ -134,6 +139,7 @@ export default function ProfilePanel({
           </button>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

@@ -62,6 +62,20 @@ html[data-theme="light"] .btn:hover { background: #e0e0e2; }
 .btn-primary:hover { background: #0e8f6a; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Portal "Chat" button: blue when credits remain, light grey when spent. */
+.btn-chat {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+.btn-chat:hover { background: #1d4ed8; }
+.btn-chat:disabled {
+  background: #d4d4d8;
+  border-color: #d4d4d8;
+  color: #9ca3af;
+  opacity: 1;
+}
+
 .input {
   width: 100%;
   padding: 10px 12px;
@@ -178,6 +192,17 @@ html[data-theme="light"] .btn:hover { background: #e0e0e2; }
   border-radius: 6px;
 }
 .modal-x:hover { color: var(--text); background: var(--bg); }
+.modal-wide {
+  max-width: 640px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+}
+.modal-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
 
 /* ---- Chat UI: classes extracted from inline styles (chat-client + chat components) ---- */
 
@@ -201,16 +226,25 @@ html[data-theme="light"] .chat-row.active { background: #e4e4e7; }
 /* Profile panel (sidebar footer) */
 .profile-line { display: flex; align-items: center; gap: 10px; }
 .profile-info { min-width: 0; flex: 1; }
-/* Countdown: its own section above the profile block (~2/3 of its height). */
+/* Countdown: its own section above the profile block (~2/3 of its height).
+   Rendered as a <button> (click opens buy-credits) — reset the button chrome. */
 .countdown-section {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   padding: 8px 12px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   min-height: 72px;
+  cursor: pointer;
 }
+.countdown-section:hover { background: var(--bg); }
 .countdown-icon { color: var(--muted); flex-shrink: 0; }
 .countdown-info { min-width: 0; flex: 1; }
 .countdown-label { font-size: 11px; color: var(--muted); }
@@ -224,6 +258,24 @@ html[data-theme="light"] .chat-row.active { background: #e4e4e7; }
   font-variant-numeric: tabular-nums;
 }
 .countdown-time.spent { color: var(--danger); }
+.countdown-time.low { color: var(--danger); }
+
+/* Low-balance banner: top of the chat container, full width. */
+.balance-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.warning-icon { flex-shrink: 0; }
+.balance-banner-spacer { flex: 1; }
+.balance-banner-center { display: flex; align-items: center; gap: 10px; }
+.balance-banner-end { flex: 1; display: flex; justify-content: flex-end; }
+.toast-text { font-size: 18px; font-weight: 700; }
+.toast-text .toast-time { font-weight: 700; }
+.btn-toast { padding: 4px 12px; font-size: 13px; white-space: nowrap; }
 .profile-actions { display: flex; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .btn-inline { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 10px; font-size: 13px; flex: 1; }
 .avatar-btn-sm { width: 36px; height: 36px; }
@@ -350,6 +402,39 @@ html[data-theme="light"] .chat-row.active { background: #e4e4e7; }
 .pay-flex { display: flex; gap: 16px; align-items: flex-start; }
 .amount-row { display: grid; grid-template-columns: 180px 1fr; gap: 8px; align-items: center; }
 .amount-value { display: flex; align-items: center; gap: 8px; }
+
+/* Purchase card (shared by portal page + chat buy-credits modal). */
+.tier-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.tier-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.tier-btn.selected { border-color: var(--accent); }
+.tier-field { margin-top: 16px; }
+.coin-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+.coin-btn {
+  display: grid;
+  place-items: center;
+  width: 57px;
+  height: 57px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  padding: 4px;
+}
+.coin-btn.selected { border-color: var(--accent); background: var(--bg); }
+.tier-buy { margin-top: 16px; width: 100%; }
 
 @media (max-width: 560px) {
   /* Portal payment panel: stack QR above address, amount rows single column. */

@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Composer from "@/components/chat/composer";
+import BuyCreditsModal from "@/components/chat/buy-credits-modal";
+import LowBalanceToast from "@/components/chat/low-balance-toast";
 import MessageList from "@/components/chat/message-list";
 import ProfilePanel from "@/components/chat/profile-panel";
 import ProfileSettingsModal from "@/components/chat/profile-settings-modal";
 import type { ChatSummary, Message } from "@/components/chat/types";
+import { LOW_BALANCE_SECONDS } from "@/components/chat/types";
+import type { Tier } from "@/components/payment/purchase-card";
 import { jsonSafe } from "@/lib/error-body";
 
 interface LinkedAccountInfo {
@@ -43,7 +47,16 @@ function fileToAvatarDataUrl(file: File): Promise<string> {
   });
 }
 
-export default function ChatClient({ userEmail }: { userEmail: string }) {
+export default function ChatClient({
+  userEmail,
+  tiers,
+  coins,
+}: {
+  userEmail: string;
+  /** Server-computed pricing (same source as the portal). */
+  tiers: Tier[];
+  coins: string[];
+}) {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [chatId, setChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -73,6 +86,10 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
   const [unlinkPassword, setUnlinkPassword] = useState("");
   /** Public username: current value, edited inside the modal. */
   const [username, setUsername] = useState<string | null>(null);
+  /** Low-balance toast: shown once per session until dismissed. */
+  const [lowToastDismissed, setLowToastDismissed] = useState(false);
+  /** Buy-credits modal (opens from the countdown section). */
+  const [buyOpen, setBuyOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -419,6 +436,7 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
           theme={theme}
           applyTheme={applyTheme}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenBuy={() => setBuyOpen(true)}
           fileInputRef={fileInputRef}
           onUploadFile={(e) => void onAvatarFile(e)}
           onRemoveAvatar={() => void removeAvatar()}
@@ -442,9 +460,23 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
           </button>
           <div className="chat-topbar-title">Chat</div>
         </div>
+        {/* Low-balance banner: top of the chat container, full width. */}
+        {balance !== null && balance < LOW_BALANCE_SECONDS && !lowToastDismissed && (
+          <LowBalanceToast balance={balance} onBuy={() => setBuyOpen(true)} onDismiss={() => setLowToastDismissed(true)} />
+        )}
         <MessageList messages={messages} status={status} error={error} streaming={streaming} bottomRef={bottomRef} />
         <Composer input={input} setInput={setInput} streaming={streaming} onSend={send} />
       </section>
+
+      {/* Buy-credits modal: purchase without leaving the chat thread. */}
+      {buyOpen && (
+        <BuyCreditsModal
+          tiers={tiers}
+          coins={coins}
+          onBalanceUpdate={(s) => setBalance(s)}
+          onClose={() => setBuyOpen(false)}
+        />
+      )}
 
       {/* Profile settings modal */}
       {settingsOpen && (

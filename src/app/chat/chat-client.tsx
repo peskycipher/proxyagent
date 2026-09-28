@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 
 interface Message {
@@ -25,6 +26,7 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
   /** Mobile only: whether the chat-list sidebar is slid in (CSS ≤768px). */
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   const refreshChats = useCallback(async () => {
     const res = await fetch("/api/chats");
@@ -38,6 +40,41 @@ export default function ChatClient({ userEmail }: { userEmail: string }) {
     refreshChats();
     fetch("/api/me").then((r) => r.json()).then((b) => setBalance(b.balanceSeconds ?? null)).catch(() => {});
   }, [refreshChats]);
+
+  // Page-open metering: heartbeat /api/chat-presence every 10s; the server
+  // bills elapsed wall-clock seconds from its own DB clock. A 402 (balance
+  // spent) stops the heartbeat and returns the user to the portal to buy time.
+  useEffect(() => {
+    let stopped = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const tick = async () => {
+      if (document.visibilityState === "hidden") return; // catch-up cap covers it
+      try {
+        const res = await fetch("/api/chat-presence", { method: "POST" });
+        const body = (await res.json().catch(() => ({}))) as { balanceSeconds?: number };
+        if (res.status === 402 || (typeof body.balanceSeconds === "number" && body.balanceSeconds === 0)) {
+          stopped = true;
+          if (timer) clearInterval(timer);
+          router.push("/portal");
+          return;
+        }
+        if (typeof body.balanceSeconds === "number") setBalance(body.balanceSeconds);
+      } catch {
+        // transient network failure — the next tick retries
+      }
+    };
+    void tick(); // immediate: seeds the server clock and redirects 0-balance users
+    timer = setInterval(() => void tick(), 10_000);
+    const onUnload = () => {
+      if (!stopped) navigator.sendBeacon?.("/api/chat-presence");
+    };
+    window.addEventListener("pagehide", onUnload);
+    return () => {
+      stopped = true;
+      if (timer) clearInterval(timer);
+      window.removeEventListener("pagehide", onUnload);
+    };
+  }, [router]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

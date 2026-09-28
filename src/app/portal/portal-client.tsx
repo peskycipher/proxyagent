@@ -189,7 +189,11 @@ export default function PortalClient({
           <div className="muted">{email}</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <a className="btn" href="/chat">Chat</a>
+          {balance > 0 ? (
+            <a className="btn" href="/chat">Chat</a>
+          ) : (
+            <button type="button" className="btn" disabled title="No credits — buy time below">Chat</button>
+          )}
           <button type="button" className="btn" onClick={() => void signOut({ callbackUrl: "/" })}>Sign out</button>
         </div>
       </div>

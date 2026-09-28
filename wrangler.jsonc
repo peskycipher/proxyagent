@@ -23,6 +23,12 @@
       }
     ]
   },
+  "send_email": [
+    {
+      "name": "NOTIFY_OPS",
+      "destination_address": "payments@proxyagent.rent"
+    }
+  ],
   "migrations": [
     {
       "tag": "v1",

@@ -3,8 +3,8 @@ import { TIERS, priceUsdCents } from "@/lib/pricing";
 
 export default function Home() {
   return (
-    <main style={{ maxWidth: 760, margin: "0 auto", padding: "80px 24px" }}>
-      <h1 style={{ fontSize: 40, marginBottom: 8 }}>Uncensored AI chat</h1>
+    <main className="landing" style={{ maxWidth: 760, margin: "0 auto" }}>
+      <h1 style={{ marginBottom: 8 }}>Uncensored AI chat</h1>
       <p className="muted" style={{ fontSize: 18, marginBottom: 40 }}>
         Your model. Your conversation. Metered to the second, prepaid in crypto.
       </p>

@@ -6,8 +6,9 @@ Metered, uncensored LLM chat service. Next.js App Router + SQLite + CryptAPI cry
 
 - **Auth**: email+password (scrypt), Auth.js (next-auth v5) JWT sessions. `/chat` and `/portal` require login.
 - **Billing**: prepaid time-credit balance in seconds. Every chat request debits actual wall-clock model time (min 1s), atomically, with an append-only audit ledger. Per-user lock — no parallel streams on one account.
-- **Pricing**: $1.06/h (2 × Runpod $0.53/h). Tiers: 1h $1.06 · 3h $3.02 (−5%) · 6h $5.72 (−10%) · 12h $10.81 (−15%).
+- **Pricing**: $1.59/h (3 × Runpod $0.53/h). Tiers: 12h $19.08 · 24h $36.25 (−5%) · 72h $103.03 (−10%) · 120h $162.18 (−15%).
 - **Payments**: CryptAPI hosted gateway. `POST /api/purchases` creates a pending purchase + payment address; the signed webhook at `/api/webhooks/gateway/<GATEWAY_WEBHOOK_SECRET>` confirms and credits. Underpayments (vs block price, 2% tolerance) are marked `underpaid` and not credited.
+- **Profile & accounts**: avatar (uploaded picture, or the linked Google/GitHub account's photo as fallback), optional public username, and linked OAuth accounts (verified-email gated; link/unlink from profile settings). Light/dark theme, persisted.
 - **Pod automation**: first chat request ensures the pod is running (`POST /v2/pods/{id}/action` start) and polls `llama-server /health`; an idle stopper halts the pod after `POD_IDLE_TIMEOUT_SECONDS` (default 10 min).
 - **Security**: pod URL, Runpod key and gateway secret are server-side only; webhook RSA-SHA256 signature verified; credits never float (integer seconds); balance can never go negative (transactional debit).
 

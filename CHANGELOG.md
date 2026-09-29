@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Profile settings (chat sidebar avatar menu → Profile settings)**
+  - Avatar: upload a picture (client-resized to 128px, stored as a data URL) or use the linked Google/GitHub account's photo as fallback (GitHub avatars are also synthesized from the numeric account id when no URL is stored). ✕ / Remove reverts to the letter avatar.
+  - Public username: unique (case-insensitive), 2–32 chars (`[A-Za-z0-9_-]`); empty clears it (`POST /api/me/username`, 409 on conflict).
+  - Linked accounts: Google/GitHub link/unlink — explicit link flow via a short-lived link-intent cookie, gated on a verified provider email; one provider identity can bind to at most one profile. Unlinking the last remaining sign-in method requires confirming the password. Legacy sessions (minted before the feature) self-heal their missing row — and backfill the provider picture — from the OAuth identity carried on the token.
+  - Theme: light/dark toggle, persisted to `localStorage`, applied before first paint (no flash).
+
+- **In-chat purchases**: the portal's "Buy time credits" card is extracted into a shared `PurchaseCard` (tier grid, display-currency selector, coin picker, QR + address + copy buttons, 5s settle polling, underpaid/expired banner) rendered in a modal on the chat page — countdown click or low-balance banner button opens it. Balance updates live in the sidebar countdown and portal Chat button on settle, without leaving the thread.
+
+- **Countdown section (chat sidebar)**: time-left display moved into its own ~2/3-height section above the profile block; clicking opens the buy-credits modal. Formatter ladder: `s → m → h → d (>23h) → mo (30d) → y (365d)`, e.g. `90,000,000s → 2y 10mo 11d 16h 0m 0s`.
+
+- **Low-balance banner (<15 min)**: full-width bar at the top of the chat container with an amber warning triangle, a live per-second countdown (bold 18px), and a Purchase button opening the in-chat modal (dismiss once per session). Countdown turns red at the threshold.
+
+### Changed
+
+- Chat sidebar: Portal/Sign-out moved into buttons; portal `Chat` button is blue when credits remain (>1s) and light grey + disabled at ≤1s.
+- `chat-client.tsx` split into focused components (`MessageList`, `Composer`, `ProfilePanel`, `ProfileSettingsModal`, plus shared `types.ts`); its inline styles moved to CSS classes.
+- Shared helpers: `requireUser()`/`unauthorized()` route guards (all API routes), `jsonSafe()` defensive JSON parsing.
+- `linked_accounts` now also stores the provider picture (`provider_picture`) with a self-healing backfill, and the deprecated `React.FormEvent` uses were migrated to `SubmitEvent`.
+
 - **Portal**
   - Display-currency selector (USD/EUR/GBP/CAD/JPY/AUD/CHF/CNY/INR) above the tier grid; tier prices, payment-panel price line and the new locked equivalent field all re-render in the selected currency via CryptAPI's convert endpoint (new session-gated `/api/fx`, per-currency rate cache, USD fallback while loading/unavailable).
   - Payment panel: a locked (read-only) field below "Amount to transfer" shows the transaction equivalent in the selected currency, marked with a nerd-fonts `cod-lock` SVG.

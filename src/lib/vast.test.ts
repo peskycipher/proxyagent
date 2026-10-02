@@ -1,0 +1,23 @@
+import { describe, expect, it } from "vitest";
+import { mapVastStatus } from "@/lib/vast";
+
+describe("mapVastStatus", () => {
+  it("maps running", () => {
+    expect(mapVastStatus("running")).toEqual({ status: "RUNNING", actions: ["stop"] });
+  });
+  it("maps loading to STARTING (decideStart: wait)", () => {
+    expect(mapVastStatus("loading")).toEqual({ status: "STARTING", actions: ["start"] });
+  });
+  it("maps restartable states to EXITED+start (decideStart: start)", () => {
+    for (const s of ["stopped", "exited", "created"]) {
+      expect(mapVastStatus(s)).toEqual({ status: "EXITED", actions: ["start"] });
+    }
+  });
+  it("maps destroyed/error to ERROR (decideStart: error)", () => {
+    expect(mapVastStatus("destroyed")).toEqual({ status: "ERROR", actions: [] });
+    expect(mapVastStatus("error")).toEqual({ status: "ERROR", actions: [] });
+  });
+  it("treats unknown states as restartable, not fatal", () => {
+    expect(mapVastStatus("something-new")).toEqual({ status: "EXITED", actions: ["start"] });
+  });
+});

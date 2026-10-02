@@ -1,5 +1,9 @@
 import { podControl } from "@/lib/pod/control";
-import { llamaHealthy } from "@/lib/runpod";
+import { llamaHealthy as runpodLlamaHealthy } from "@/lib/runpod";
+import { configured as vastConfigured, llamaHealthy as vastLlamaHealthy } from "@/lib/vast";
+
+/** Health check against the active backend (vast learns its IP from the API). */
+const llamaHealthy = () => (vastConfigured() ? vastLlamaHealthy() : runpodLlamaHealthy());
 
 /**
  * Pod lifecycle: ensure running before a chat request, auto-stop after idle.
@@ -27,7 +31,7 @@ export async function ensurePodUp(
   touchPodActivity();
   const result = await podControl().ensureRunning();
   if (result === "error") {
-    throw new Error("pod is in ERROR state on Runpod — check the Runpod console");
+    throw new Error("pod is in ERROR state — check the provider console");
   }
   if (result === "starting") {
     onStatus?.("pod_starting");

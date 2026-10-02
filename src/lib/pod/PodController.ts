@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { getPod, startPod, stopPod, isConflict, RunpodError } from "@/lib/runpod";
+import { getPod, startPod, stopPod, isConflict } from "./backend";
 import { logger } from "@/lib/logger";
 import {
   STATUS_CACHE_TTL_MS,
@@ -86,7 +86,7 @@ export class PodController extends DurableObject {
           logger.error("pod controller startPod failed", { error: (e as Error).message });
           return "error";
         }
-        // 409 = another actor already started it — treat as "starting".
+        // conflict = another actor already started it — treat as "starting".
       }
     }
 
@@ -162,7 +162,7 @@ export class PodController extends DurableObject {
       await stopPod();
       logger.info("pod stopped after idle timeout");
     } catch (e) {
-      if (e instanceof RunpodError && e.status === 409) {
+      if (isConflict(e)) {
         // Already stopped (e.g. raced a concurrent stop) — success.
         logger.debug("idle stop: pod already stopped (409)");
       } else {

@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { getPod, startPod, stopPod, isConflict } from "@/lib/runpod";
+import { getPod, startPod, stopPod, isConflict } from "./backend";
 import { logger } from "@/lib/logger";
 import { decideStart, type EnsureRunningResult } from "./logic";
 import type { PodController } from "./PodController";

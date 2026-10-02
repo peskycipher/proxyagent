@@ -29,14 +29,14 @@
     "@types/react-dom": "^19.3.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.2",
-    "wrangler": "^4.141.0"
+    "wrangler": "^4.147.0"
   },
   "allowScripts": {
     "wrangler@4.141.0": true,
     "vitest@5.0.1": true,
     "esbuild@0.25.4": true,
     "esbuild@0.28.1": true,
-    "better-sqlite3@9.6.0": true,
-    "workerd@1.20260925.1": true
+    "workerd@1.20261001.1": true,
+    "better-sqlite3@13.0.3": true
   }
 }

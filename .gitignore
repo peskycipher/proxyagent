@@ -28,3 +28,4 @@ CLAUDE.md
 .agents/
 .claude/
 GRAFT_BLAST.md
+.supercov/

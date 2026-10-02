@@ -13,7 +13,7 @@ import { getDb } from "@/lib/db";
  *   minutes-long stream never expires while it is actually running.
  */
 
-export const CHAT_LOCK_TTL_MS = 90_000;
+const CHAT_LOCK_TTL_MS = 90_000;
 export const CHAT_LOCK_RENEW_INTERVAL_MS = 30_000;
 
 /** Try to take the chat lock. False means another stream holds it (or held it recently). */

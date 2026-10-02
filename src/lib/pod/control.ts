@@ -1,7 +1,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getPod, startPod, stopPod, isConflict } from "@/lib/runpod";
 import { logger } from "@/lib/logger";
-import { decideStart } from "./logic";
+import { decideStart, type EnsureRunningResult } from "./logic";
 import type { PodController } from "./PodController";
 
 /**
@@ -21,7 +21,6 @@ import type { PodController } from "./PodController";
  */
 
 type PodControlMode = "auto" | "inline" | "durable";
-type EnsureRunningResult = "running" | "starting" | "error";
 
 interface PodControl {
   touchActivity(): Promise<void>;

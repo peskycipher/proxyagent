@@ -2,7 +2,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { getDb, newId } from "@/lib/db";
 
 /** scrypt hash: scrypt$N$salt$hash (all hex) — no external deps. */
-export function hashPassword(password: string): string {
+function hashPassword(password: string): string {
   const N = 16384, r = 8, p = 1;
   const salt = randomBytes(16);
   const hash = scryptSync(password, salt, 64, { N, r, p });

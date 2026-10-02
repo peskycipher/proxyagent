@@ -1,31 +1,25 @@
-import {
-  ensurePodUp,
-  touchPodActivity,
-  beginPodStream,
-  renewPodStream,
-  endPodStream,
-} from "@/lib/pod";
-import { vastChatRequest, vastConfigured } from "@/lib/vast";
+import { ensurePodUp, ensureLlamaHealthy, touchPodActivity, beginPodStream, renewPodStream, endPodStream } from "@/lib/pod";
 
 /**
  * Inference provider selection for the chat route.
  *
- * - "vast": Vast.ai Serverless (openai.vast.ai OpenAI-compatible proxy).
- *   No pod lifecycle at all — serverless auto-scales, so warmup is a no-op
- *   and the idle-stop stream leases are skipped (there is nothing to stop).
- * - "runpod": the original llama.cpp-on-RunPod path (pod + DO idle controller).
+ * - "direct": llama-server reachable directly at LLAMA_SERVER_URL (the vast.ai
+ *   on-demand instance). No pod lifecycle — the instance is already running,
+ *   so warmup only polls llama-server /health and idle-stop leases are skipped
+ *   (there is nothing to stop).
+ * - "runpod": llama.cpp-on-RunPod (pod + DO idle controller) — the rollback
+ *   path: set RUNPOD_* vars and MODEL_PROVIDER=runpod.
  *
- * Selected automatically by configuration (vast wins when its env vars are
- * fully set) with an explicit MODEL_PROVIDER override. The current production
- * deployment sets neither VAST_* var, so behavior is unchanged there.
+ * Selected automatically (runpod when RUNPOD_POD_ID is set) with an explicit
+ * MODEL_PROVIDER override.
  */
 
-export type InferenceProvider = "runpod" | "vast";
+export type InferenceProvider = "runpod" | "direct";
 
 export function activeProvider(): InferenceProvider {
   const explicit = process.env.MODEL_PROVIDER;
-  if (explicit === "vast" || explicit === "runpod") return explicit;
-  return vastConfigured() ? "vast" : "runpod";
+  if (explicit === "runpod" || explicit === "direct") return explicit;
+  return process.env.RUNPOD_POD_ID && process.env.RUNPOD_API_KEY ? "runpod" : "direct";
 }
 
 const LLAMA_BASE = () => (process.env.LLAMA_SERVER_URL || "").replace(/\/$/, "");
@@ -46,9 +40,9 @@ export async function ensureModelUp(
   onStatus?: (msg: string) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  if (activeProvider() === "vast") {
-    onStatus?.("ready");
-    return;
+  const provider = activeProvider();
+  if (provider === "direct") {
+    return ensureLlamaHealthy(onStatus, signal);
   }
   return ensurePodUp(onStatus, signal);
 }
@@ -59,7 +53,6 @@ export async function modelChat(
   signal: AbortSignal,
 ): Promise<Response> {
   const body = JSON.stringify({ stream: true, messages });
-  if (activeProvider() === "vast") return vastChatRequest(body, signal);
   return fetch(`${LLAMA_BASE()}/v1/chat/completions`, {
     method: "POST",
     headers: llamaHeaders(),

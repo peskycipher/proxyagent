@@ -32,6 +32,14 @@ export async function ensurePodUp(
   if (result === "starting") {
     onStatus?.("pod_starting");
   }
+  return ensureLlamaHealthy(onStatus, signal);
+}
+
+/** Polls llama-server /health until it answers, without pod lifecycle. */
+export async function ensureLlamaHealthy(
+  onStatus?: (msg: string) => void,
+  signal?: AbortSignal,
+): Promise<void> {
   const deadline = Date.now() + WARMUP_TIMEOUT_MS();
   // llama-server boot takes a while (model weights loading); poll health.
   for (;;) {
@@ -66,6 +74,6 @@ export function endPodStream(userId: string): void {
   void podControl().endStream(userId);
 }
 
-export function sleep(ms: number): Promise<void> {
+function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }

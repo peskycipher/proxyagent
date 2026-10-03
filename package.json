@@ -8,7 +8,7 @@
     "start": "next start",
     "test": "vitest run",
     "build:worker": "opennextjs-cloudflare build",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview --config wrangler.preview.jsonc",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf-typegen": "wrangler types"
   },

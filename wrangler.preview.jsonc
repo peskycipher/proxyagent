@@ -1,0 +1,30 @@
+// Local-preview-only config, used ONLY by `npm run preview` for the
+// getPlatformProxy() env-var scan (opennextjs-cloudflare preview --config).
+//
+// Why this file exists: wrangler's platform proxy (used by `opennextjs-cloudflare
+// preview` to extract env vars) runs an *empty script* while carrying bindings
+// from the config. Any internal same-worker Durable Object binding therefore
+// trips a spurious workerd warning
+// ("...referenced the class "PodController", but no such Durable Object class
+// is exported from the worker...").
+//
+// Nothing is actually broken: worker.ts re-exports PodController
+// (src/lib/pod/PodController.ts, `extends DurableObject`), verified via
+// `wrangler deploy --dry-run --outdir` showing `export { PodController }`, and
+// production deployments are unaffected. Keep this file identical to
+// wrangler.jsonc minus `durable_objects` and `migrations`.
+//
+// The subsequent `wrangler dev` inside `opennextjs-cloudflare preview` still
+// uses wrangler.jsonc, so the PodController DO remains fully usable during
+// local preview.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "proxy-agent",
+  "main": "worker.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "TURNSTILE_HOSTNAMES": "proxyagent.rent",
+    "BASE_URL": "https://proxyagent.rent"
+  }
+}

@@ -20,6 +20,7 @@ import {
 } from "@/lib/chat-lock";
 import { historyBudgets, trimHistory } from "@/lib/chat-history";
 import { logger } from "@/lib/logger";
+import { track } from "@/lib/telemetry";
 
 const bodySchema = z.object({
   chatId: z.string().min(1).optional(),
@@ -32,18 +33,23 @@ export async function POST(req: Request) {
   const userId = user.id;
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "invalid request" }, { status: 400 });
+  if (!parsed.success) {
+    track("chat.rejected", { "app.chat.reason": "invalid_request" });
+    return Response.json({ error: "invalid request" }, { status: 400 });
+  }
   const { chatId, message } = parsed.data;
 
   // Distributed per-user lock (chat_locks TTL row): prevents parallel
   // double-burn of credits, across instances and after crashes (stale locks
   // expire via TTL). One stream at a time per account.
   if (!(await acquireChatLock(userId))) {
+    track("chat.rejected", { "app.user.id": userId, "app.chat.reason": "already_streaming" });
     return Response.json({ error: "another request is already streaming for this account" }, { status: 429 });
   }
 
   const balance = await balanceSeconds(userId);
   if (balance < 1) {
+    track("chat.rejected", { "app.user.id": userId, "app.chat.reason": "insufficient_credits" });
     return Response.json({ error: "insufficient credits — buy more time in the portal" }, { status: 402 });
   }
 
@@ -61,6 +67,13 @@ export async function POST(req: Request) {
   const userMsgId = newId("msg");
   await db.run("INSERT INTO messages (id, chat_id, role, content, created_at) VALUES (?,?,?,?,?)", userMsgId, effectiveChatId, "user", message, Date.now());
 
+  track("chat.request", {
+    "app.user.id": userId,
+    "app.chat.id": effectiveChatId,
+    "app.chat.is_new": !chatRow,
+    "app.chat.message_chars": message.length,
+  });
+
   const allHistory = await db
     .all<{ role: string; content: string }>("SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at ASC", effectiveChatId);
   // Bound the prompt: newest messages win (see lib/chat-history.ts) so long
@@ -75,6 +88,7 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
       let meter: Meter | null = null; // starts only when the model request begins
+      const startedAt = Date.now();
       let assistantContent = "";
       let billed = 0;
       let cleanedUp = false;
@@ -116,9 +130,17 @@ export async function POST(req: Request) {
             );
           }
           send("done", { billedSeconds: billed, chatId: effectiveChatId, balanceSeconds: await balanceSeconds(userId) });
+          track("chat.completed", {
+            "app.user.id": userId,
+            "app.chat.id": effectiveChatId,
+            "app.chat.billed_seconds": billed,
+            "app.chat.response_chars": assistantContent.length,
+            "app.chat.duration_ms": Date.now() - startedAt,
+          });
         } catch (e) {
           // debit failure: log loudly, but the stream is already over
           logger.error("chat cleanup error", { chatId: effectiveChatId, error: (e as Error).message });
+          track("chat.failed", { "app.chat.id": effectiveChatId, "app.chat.error": "cleanup_error" });
         }
         // Release the lock even when billing failed above — a stuck lock would
         // block this user's next message until the TTL lapses.
@@ -144,6 +166,7 @@ export async function POST(req: Request) {
         const upstreamRes = await modelChat(history, aborter.signal);
         if (!upstreamRes.ok || !upstreamRes.body) {
           logger.error("model upstream error", { chatId: effectiveChatId, status: upstreamRes.status });
+          track("chat.failed", { "app.chat.id": effectiveChatId, "app.chat.upstream_status": upstreamRes.status });
           send("error", { message: `model upstream error ${upstreamRes.status}` });
           cleanup();
           return;

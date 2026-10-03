@@ -35,6 +35,22 @@
       "new_sqlite_classes": ["PodController"]
     }
   ],
+  "observability": {
+    // Traces + logs exported to Honeycomb via OTLP (dashboard destinations).
+    // persist: false → data lives only in Honeycomb (avoid CF storage cost).
+    "traces": {
+      "enabled": true,
+      "destinations": ["honeycomb-traces"],
+      "head_sampling_rate": 1.0, // low-volume service — sample everything
+      "persist": false
+    },
+    "logs": {
+      "enabled": true,
+      "destinations": ["honeycomb-logs"],
+      "head_sampling_rate": 1.0,
+      "persist": false
+    }
+  },
   "vars": {
     "TURNSTILE_HOSTNAMES": "proxyagent.rent",
     "BASE_URL": "https://proxyagent.rent"

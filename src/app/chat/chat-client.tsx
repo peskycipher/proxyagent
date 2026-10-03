@@ -260,6 +260,13 @@ export default function ChatClient({
       try {
         const res = await fetch("/api/chat-presence", { method: "POST" });
         const body = await jsonSafe<{ balanceSeconds?: number }>(res);
+        if (res.status === 401) {
+          // Sliding session expired (5 min of inactivity): back to login.
+          stopped = true;
+          if (timer) clearInterval(timer);
+          router.push("/login");
+          return;
+        }
         if (res.status === 402 || (typeof body.balanceSeconds === "number" && body.balanceSeconds === 0)) {
           stopped = true;
           if (timer) clearInterval(timer);
@@ -343,6 +350,12 @@ export default function ChatClient({
       });
       if (!res.ok || !res.body) {
         const body = await jsonSafe<{ error?: string }>(res);
+        if (res.status === 401) {
+          // Sliding session expired while the tab sat idle — back to login.
+          setMessages((m) => m.filter((_, i) => i < m.length - 1));
+          router.push("/login");
+          return;
+        }
         setError(body.error ?? `request failed (${res.status})`);
         setStreaming(false);
         setMessages((m) => m.filter((_, i) => i < m.length - 1));

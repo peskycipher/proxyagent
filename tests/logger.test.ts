@@ -7,17 +7,20 @@ afterEach(() => {
 });
 
 describe("structured logger", () => {
-  it("emits JSON lines with level, message and fields", async () => {
-    const captured: Array<{ level: string; line: string }> = [];
-    const lines = vi.fn((level: string, line: string) => captured.push({ level, line }));
+  it("emits structured objects with level, message and fields", async () => {
+    const captured: Array<{ level: string; line: Record<string, unknown> | string }> = [];
+    const lines = vi.fn((level: string, line: Record<string, unknown> | string) => captured.push({ level, line }));
     // stub the console methods the default sink writes to
-    const err = vi.spyOn(console, "error").mockImplementation((data: unknown) => lines("error", String(data)));
-    const log = vi.spyOn(console, "log").mockImplementation((data: unknown) => lines("info", String(data)));
+    const err = vi.spyOn(console, "error").mockImplementation((data: unknown) => lines("error", data as Record<string, unknown>));
+    const log = vi.spyOn(console, "log").mockImplementation((data: unknown) => lines("info", data as Record<string, unknown>));
 
     const { logger, configureLogger } = await import("@/lib/logger");
     logger.error("lock lost mid-stream", { userId: "u1" });
     expect(err).toHaveBeenCalledTimes(1);
-    const parsed = JSON.parse(captured[0].line);
+    // The default sink logs a plain object (not a JSON string): Cloudflare
+    // Workers Logs extracts object keys as structured attributes, which the
+    // logs OTLP export delivers to Honeycomb as queryable columns.
+    const parsed = captured[0].line as Record<string, unknown>;
     expect(parsed.level).toBe("error");
     expect(parsed.message).toBe("lock lost mid-stream");
     expect(parsed.userId).toBe("u1");
@@ -25,7 +28,7 @@ describe("structured logger", () => {
 
     // info goes through the non-error console path
     logger.info("pod stopped");
-    expect(JSON.parse(captured[1].line).level).toBe("info");
+    expect((captured[1].line as Record<string, unknown>).level).toBe("info");
     expect(log).toHaveBeenCalled();
     void configureLogger;
   });

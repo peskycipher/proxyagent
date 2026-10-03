@@ -13,3 +13,4 @@ export const getPod = () => backend().getPod();
 export const startPod = () => backend().startPod();
 export const stopPod = () => backend().stopPod();
 export const isConflict = (e: unknown) => backend().isConflict(e);
+export const llamaHealthy = () => backend().llamaHealthy();

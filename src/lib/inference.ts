@@ -1,5 +1,7 @@
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { ensurePodUp, ensureLlamaHealthy, touchPodActivity, beginPodStream, renewPodStream, endPodStream } from "@/lib/pod";
 import { configured as vastConfigured, llamaBase } from "@/lib/vast";
+import { track } from "@/lib/telemetry";
 
 /**
  * Inference provider selection for the chat route.
@@ -49,6 +51,35 @@ export async function ensureModelUp(
     return ensurePodUp(onStatus, signal);
   }
   return ensureLlamaHealthy(onStatus, signal);
+}
+
+/**
+ * Chat-landing warmup: when a user lands on /chat, check whether the model
+ * backend is up and start it if it is off, so their first chat message
+ * doesn't pay the cold start. Cheaper than warming on login — visitors who
+ * never intend to chat don't start the pod. Fire-and-forget — the page
+ * render must never block or fail on pod control. On the deployed worker
+ * the in-flight warmup is attached via ctx.waitUntil so it survives the
+ * page response; in `next dev` (no worker context) it runs on the
+ * standalone promise.
+ */
+export function warmModelOnChatLanding(): void {
+  const p = (async (): Promise<void> => {
+    try {
+      await ensureModelUp();
+      track("pod.post_login_warmup_complete", { "app.pod.warmup_trigger": "chat_landing" });
+    } catch (e) {
+      track("pod.post_login_warmup_failed", {
+        "app.pod.warmup_trigger": "chat_landing",
+        "app.pod.error": (e as Error).message.slice(0, 120),
+      });
+    }
+  })();
+  try {
+    getCloudflareContext().ctx?.waitUntil(p);
+  } catch {
+    // Outside workerd (next dev): no execution context to attach to.
+  }
 }
 
 /** Streams an OpenAI-compatible chat completion from the active provider. */

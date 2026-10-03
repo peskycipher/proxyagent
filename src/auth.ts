@@ -8,6 +8,7 @@ import { getUserByEmail, verifyPassword, upsertUserByEmail } from "@/lib/users";
 import { OAuthEmailNotVerifiedError, oauthSignInDecision, oauthVerifiedEmail } from "@/lib/oauth";
 import { clearLinkIntent, providerPictureFromProfile, readLinkIntent, upsertLinkedAccount } from "@/lib/linked-accounts";
 import { turnstileErrorMessage, verifyTurnstileToken } from "@/lib/turnstile";
+import { track } from "@/lib/telemetry";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -26,9 +27,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           typeof creds?.turnstileToken === "string" ? creds.turnstileToken : undefined,
           ["login", "signup"],
         );
-        if (!captcha.ok) throw new Error(turnstileErrorMessage(captcha));
+        if (!captcha.ok) {
+          track("login.failed", { "app.login.reason": "captcha_failed" });
+          throw new Error(turnstileErrorMessage(captcha));
+        }
         const user = await getUserByEmail(email);
-        if (!user || !verifyPassword(password, user.password_hash)) return null;
+        if (!user || !verifyPassword(password, user.password_hash)) {
+          track("login.failed", { "app.login.reason": "bad_credentials" });
+          return null;
+        }
+        track("login.success", { "app.user.id": user.id });
         return { id: user.id, email: user.email };
       },
     }),

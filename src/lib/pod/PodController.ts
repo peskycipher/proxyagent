@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
-import { getPod, startPod, stopPod, isConflict } from "./backend";
+import { getPod, startPod, stopPod, isConflict, llamaHealthy } from "./backend";
 import { logger } from "@/lib/logger";
+import { track } from "@/lib/telemetry";
 import {
   STATUS_CACHE_TTL_MS,
   STREAM_LEASE_TTL_MS,
@@ -56,6 +57,17 @@ export class PodController extends DurableObject {
    * Returns quickly — the caller polls llama-server health locally for
    * per-request SSE progress.
    */
+  /**
+   * Control-plane hiccup fallback (vast console API 429/5xx/timeout, network
+   * blip). A provider API failure is not evidence the pod itself is dead — ask
+   * llama-server health for ground truth: healthy ⇒ "running", otherwise
+   * "starting" (the caller's warmup poll decides the outcome). Only the
+   * provider's own ERROR/TERMINATED snapshot is fatal.
+   */
+  private async controlPlaneFallback(): Promise<"running" | "starting"> {
+    return (await llamaHealthy()) ? "running" : "starting";
+  }
+
   async ensureRunning(): Promise<"running" | "starting" | "error"> {
     await this.touchActivity();
     const cached = await this.ctx.storage.get<StatusCache>("statusCache");
@@ -67,8 +79,8 @@ export class PodController extends DurableObject {
     try {
       pod = await getPod();
     } catch (e) {
-      logger.error("pod controller getPod failed", { error: (e as Error).message });
-      return "error";
+      logger.error("pod controller getPod failed (control-plane fallback)", { error: (e as Error).message });
+      return this.controlPlaneFallback();
     }
 
     const decision = decideStart(pod);
@@ -83,8 +95,8 @@ export class PodController extends DurableObject {
         await startPod();
       } catch (e) {
         if (!isConflict(e)) {
-          logger.error("pod controller startPod failed", { error: (e as Error).message });
-          return "error";
+          logger.error("pod controller startPod failed (control-plane fallback)", { error: (e as Error).message });
+          return this.controlPlaneFallback();
         }
         // conflict = another actor already started it — treat as "starting".
       }
@@ -160,6 +172,9 @@ export class PodController extends DurableObject {
 
     try {
       await stopPod();
+      // Business-level event for the Honeycomb board: instance is now down,
+      // resuming costs a cold-start warmup (see pod.warmup_* events).
+      track("pod.idle_stopped", { "app.pod.idle_seconds": Math.round((now - (last ?? now)) / 1000) });
       logger.info("pod stopped after idle timeout");
     } catch (e) {
       if (isConflict(e)) {

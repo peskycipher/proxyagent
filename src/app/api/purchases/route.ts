@@ -5,6 +5,7 @@ import { acceptedCoins, convertUsdToCoin, createCharge, getQrcode, payoutWalletF
 import { createPurchase, attachCharge } from "@/lib/purchases";
 import { tierFor } from "@/lib/pricing";
 import { logger } from "@/lib/logger";
+import { track } from "@/lib/telemetry";
 import { randomBytes } from "node:crypto";
 
 const bodySchema = z.object({ hours: z.number().int(), coin: z.string().regex(/^[a-z0-9_]+$/) });
@@ -33,6 +34,14 @@ export async function POST(req: Request) {
   // webhook handler rejects callbacks whose nonce doesn't match what we stored.
   const nonce = randomBytes(16).toString("hex");
   const purchase = await createPurchase(user.id, hours, coin, nonce);
+
+  track("purchase.created", {
+    "app.user.id": user.id,
+    "app.purchase.id": purchase.id,
+    "app.purchase.hours": hours,
+    "app.purchase.coin": coin,
+    "app.purchase.usd_cents": purchase.amount_usd_cents,
+  });
 
   // Unique callback URL (CryptAPI treats it as the charge id) carrying our
   // secret path segment + invoice id + one-time nonce, echoed back in callbacks.

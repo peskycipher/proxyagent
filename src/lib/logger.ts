@@ -16,7 +16,11 @@ export { LEVEL_ORDER };
 export type LogSink = (level: LogLevel, message: string, fields?: Record<string, unknown>) => void;
 
 const defaultSink: LogSink = (level, message, fields) => {
-  const line = JSON.stringify({ ts: new Date().toISOString(), level, message, ...fields });
+  // Log a plain object, not a JSON string: Workers Logs extracts object keys as
+  // structured attributes, so app.* fields become queryable columns in
+  // Honeycomb (via the logs OTLP export). The whole object stays readable in
+  // `wrangler tail` and the Cloudflare dashboard.
+  const line = { ts: new Date().toISOString(), level, message, ...fields };
   // error/warn surface in tail with error semantics; info/debug as plain output.
   if (LEVEL_ORDER[level] >= LEVEL_ORDER.warn) {
     console.error(line);

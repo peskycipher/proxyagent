@@ -1,6 +1,7 @@
 import { podControl } from "@/lib/pod/control";
 import { llamaHealthy as runpodLlamaHealthy } from "@/lib/runpod";
 import { configured as vastConfigured, llamaHealthy as vastLlamaHealthy } from "@/lib/vast";
+import { track } from "@/lib/telemetry";
 
 /** Health check against the active backend (vast learns its IP from the API). */
 const llamaHealthy = () => (vastConfigured() ? vastLlamaHealthy() : runpodLlamaHealthy());
@@ -31,12 +32,27 @@ export async function ensurePodUp(
   touchPodActivity();
   const result = await podControl().ensureRunning();
   if (result === "error") {
+    track("pod.ensure_failed", { "app.pod.error": "pod_in_error_state" });
     throw new Error("pod is in ERROR state — check the provider console");
   }
-  if (result === "starting") {
+  const coldStart = result === "starting";
+  if (coldStart) {
     onStatus?.("pod_starting");
   }
-  return ensureLlamaHealthy(onStatus, signal);
+  const t0 = Date.now();
+  try {
+    await ensureLlamaHealthy(onStatus, signal);
+    track("pod.warmup_complete", {
+      "app.pod.cold_start": coldStart,
+      "app.pod.warmup_ms": Date.now() - t0,
+    });
+  } catch (e) {
+    track("pod.warmup_failed", {
+      "app.pod.cold_start": coldStart,
+      "app.pod.error": (e as Error).message.slice(0, 120),
+    });
+    throw e;
+  }
 }
 
 /** Polls llama-server /health until it answers, without pod lifecycle. */

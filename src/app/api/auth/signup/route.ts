@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createUser } from "@/lib/users";
 import { turnstileErrorMessage, verifyTurnstileToken } from "@/lib/turnstile";
+import { track } from "@/lib/telemetry";
 
 const bodySchema = z.object({
   email: z.string().email(),
@@ -25,7 +26,9 @@ export async function POST(req: Request) {
   try {
     await createUser(parsed.data.email, parsed.data.password);
   } catch (e) {
+    track("signup.failed", { "app.signup.reason": (e as Error).message.slice(0, 80) });
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
+  track("user.signup");
   return NextResponse.json({ ok: true });
 }

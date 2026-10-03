@@ -2,6 +2,7 @@ import { getGatewayPubKey, senderIpAllowed, usdCentsFromConvertJson, verifyWebho
 import { confirmPurchase, getPurchase } from "@/lib/purchases";
 import { sendPaymentEmail } from "@/lib/mailer";
 import { logger } from "@/lib/logger";
+import { track } from "@/lib/telemetry";
 
 /**
  * CryptAPI callback endpoint. Secret path segment (GATEWAY_WEBHOOK_SECRET)
@@ -103,9 +104,15 @@ async function handle(req: Request, { params }: { params: Promise<{ secret: stri
       undefined;
     const result = await confirmPurchase(invoiceId, uuid, receivedUsdCents);
     if (result?.credited) {
-      // Best-effort ops notification; never blocks the "*ok*" answer.
       const purchase = await getPurchase(invoiceId);
       if (purchase) {
+        track("purchase.credited", {
+          "app.user.id": purchase.user_id,
+          "app.purchase.id": purchase.id,
+          "app.purchase.coin": purchase.coin,
+          "app.purchase.seconds": purchase.seconds,
+          "app.purchase.usd_cents": purchase.amount_usd_cents,
+        });
         await sendPaymentEmail({
           purchaseId: purchase.id,
           coin: purchase.coin,

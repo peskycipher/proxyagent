@@ -91,7 +91,8 @@ export async function getPod(): Promise<{ status: string; runtimeStatus: string 
     // queryable on the Honeycomb board via app.event = "pod.vast_error_seen".
     track("pod.vast_error_seen", { "app.pod.machine_id": "27389" });
   }
-  if (ins.cur_state === "running" && ins.public_ipaddr) learnHost(ins.public_ipaddr, llamaPort(ins.ports));
+  if (ins.cur_state === "running" && ins.public_ipaddr && !tunnelMode())
+    learnHost(ins.public_ipaddr, llamaPort(ins.ports));
   return { ...mapVastStatus(ins.cur_state ?? "unknown"), runtimeStatus: null };
 }
 
@@ -132,6 +133,9 @@ function llamaPort(ports?: Record<string, Array<{ HostPort?: number }>>): number
 // The provider's llama server address. LLAMA_SERVER_URL is the env-time value;
 // after a stop→start cycle the instance IP can change, so getPod() records the
 // public ipaddr+port it fetched and llamaBase()/llamaHealthy() prefer it.
+// Exception: an https:// LLAMA_SERVER_URL implies a tunnel/proxy in front
+// (e.g. Cloudflare Tunnel) — its hostname is DNS-stable while the pod IP
+// churns, so it is never overridden with the learned IP.
 let hostOverride: { host: string; at: number } | null = null;
 const HOST_TTL_MS = 60_000;
 
@@ -140,8 +144,19 @@ function learnHost(ip: string, port: number | null): void {
   hostOverride = { host: `${ip}:${port}`, at: Date.now() };
 }
 
+/** True when LLAMA_SERVER_URL is an https hostname (tunnel/proxy in front). */
+function tunnelMode(): boolean {
+  try {
+    return new URL(process.env.LLAMA_SERVER_URL || "").protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 /** llama-server base URL, learning the current IP from the vast API as needed. */
 export async function llamaBase(): Promise<string> {
+  const envUrl = (process.env.LLAMA_SERVER_URL || "").replace(/\/$/, "");
+  if (tunnelMode()) return envUrl;
   if (hostOverride && Date.now() - hostOverride.at < HOST_TTL_MS) return `http://${hostOverride.host}`;
   if (configured()) {
     try {
@@ -150,7 +165,7 @@ export async function llamaBase(): Promise<string> {
       // fall back to the env URL below
     }
   }
-  return (process.env.LLAMA_SERVER_URL || "").replace(/\/$/, "");
+  return envUrl;
 }
 
 /** llama.cpp llama-server health check at the learned/env base. */

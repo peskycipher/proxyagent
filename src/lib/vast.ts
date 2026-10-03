@@ -17,6 +17,7 @@
 const API_BASE = "https://console.vast.ai/api/v0";
 
 import type { PodSnapshot } from "@/lib/pod/logic";
+import { track } from "@/lib/telemetry";
 
 export class VastError extends Error {
   constructor(message: string, readonly status: number) {
@@ -63,8 +64,15 @@ export function mapVastStatus(curState: string): PodSnapshot {
     case "loading":
       return { status: "STARTING", actions: ["start"] };
     case "destroyed":
-    case "error":
       return { status: "ERROR", actions: [] };
+    case "error":
+      // Restartable, NOT fatal: budget host 27389 intermittently reports
+      // cur_state "error" and self-recovers within minutes (observed 3x
+      // 2026-10-03, ending in stopped/running). Vast's own console remedy
+      // for an errored instance is a restart, so advertise one — decideStart
+      // then paths into the normal start→conflict→health-fallback flow.
+      // Only "destroyed" is unrecoverable (volume is gone).
+      return { status: "EXITED", actions: ["start"] };
     default:
       // stopped, exited, created… — restartable via start.
       return { status: "EXITED", actions: ["start"] };
@@ -78,6 +86,11 @@ export async function getPod(): Promise<{ status: string; runtimeStatus: string 
     instances?: { cur_state?: string; public_ipaddr?: string | null; ports?: Record<string, Array<{ HostPort?: number }>> };
   };
   const ins = body.instances ?? {};
+  if (ins.cur_state === "error") {
+    // Measurable, not just mapped: recurring occurrences on host 27389 are
+    // queryable on the Honeycomb board via app.event = "pod.vast_error_seen".
+    track("pod.vast_error_seen", { "app.pod.machine_id": "27389" });
+  }
   if (ins.cur_state === "running" && ins.public_ipaddr) learnHost(ins.public_ipaddr, llamaPort(ins.ports));
   return { ...mapVastStatus(ins.cur_state ?? "unknown"), runtimeStatus: null };
 }

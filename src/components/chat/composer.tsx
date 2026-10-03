@@ -33,6 +33,7 @@ export default function Composer({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           disabled={streaming}
+          autoFocus
         />
         <button className="btn btn-primary" disabled={streaming || !input.trim()} type="submit">
           Send

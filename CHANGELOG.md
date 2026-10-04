@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Backend instance pill (chat box ↔ vast.ai webhook linkage)**: lifecycle notifications from the vast.ai webhook (started/stopped/offline/deleted/error) are now mapped and stored in the `PodController` DO (`src/lib/vast-events.ts` → webhook receiver → DO), and the existing 10s presence heartbeat returns them as `backend` so the chat box shows a live status pill above the message list — green "Backend online", amber "Backend idle — your next message starts it", red "Backend error". A non-live state is health-verified against llama-server (20s probe cache) before display, since the budget host is known to self-recover; a passing probe upgrades the pill to online. Ops-only event types (low_credit, billing_failed, outbid…) stay out of the UI, and account-wide webhook events naming another instance id are ignored.
+
 - **Profile settings (chat sidebar avatar menu → Profile settings)**
   - Avatar: upload a picture (client-resized to 128px, stored as a data URL) or use the linked Google/GitHub account's photo as fallback (GitHub avatars are also synthesized from the numeric account id when no URL is stored). ✕ / Remove reverts to the letter avatar.
   - Public username: unique (case-insensitive), 2–32 chars (`[A-Za-z0-9_-]`); empty clears it (`POST /api/me/username`, 409 on conflict).

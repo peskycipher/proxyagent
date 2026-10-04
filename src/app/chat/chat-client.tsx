@@ -12,6 +12,7 @@ import type { ChatSummary, Message } from "@/components/chat/types";
 import { LOW_BALANCE_SECONDS } from "@/components/chat/types";
 import type { Tier } from "@/components/payment/purchase-card";
 import { jsonSafe } from "@/lib/error-body";
+import type { BackendEvent } from "@/lib/vast-events";
 
 interface LinkedAccountInfo {
   provider: string;
@@ -47,6 +48,28 @@ function fileToAvatarDataUrl(file: File): Promise<string> {
   });
 }
 
+/** Backend instance pill: vast.ai webhook-fed state of the llama.cpp backend. */
+function BackendPill({ backend }: { backend: BackendEvent }) {
+  const ui =
+    backend.state === "live"
+      ? { text: "Backend online", title: "The inference instance is running (vast.ai webhook feed)." }
+      : backend.state === "idle"
+        ? {
+            text: "Backend idle — your next message starts it (warmup can take ~a minute)",
+            title: "The vast.ai instance idles to zero when unused; sending a message boots it again.",
+          }
+        : {
+            text: "Backend error — support has been notified",
+            title: "The vast.ai instance reported an error or was deleted.",
+          };
+  return (
+    <div className={`chat-backend-pill chat-backend-${backend.state}`} title={ui.title}>
+      <span className="chat-backend-dot" aria-hidden="true" />
+      <span>{ui.text}</span>
+    </div>
+  );
+}
+
 export default function ChatClient({
   userEmail,
   tiers,
@@ -64,6 +87,8 @@ export default function ChatClient({
   const [streaming, setStreaming] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
+  /** Backend instance pill, fed by vast.ai webhook events via /api/chat-presence. */
+  const [backend, setBackend] = useState<BackendEvent | null>(null);
   const [error, setError] = useState("");
   /** Mobile only: whether the chat-list sidebar is slid in (CSS ≤768px). */
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -259,7 +284,7 @@ export default function ChatClient({
       if (document.visibilityState === "hidden") return; // catch-up cap covers it
       try {
         const res = await fetch("/api/chat-presence", { method: "POST" });
-        const body = await jsonSafe<{ balanceSeconds?: number }>(res);
+        const body = await jsonSafe<{ balanceSeconds?: number; backend?: BackendEvent | null }>(res);
         if (res.status === 401) {
           // Sliding session expired (5 min of inactivity): back to login.
           stopped = true;
@@ -274,6 +299,7 @@ export default function ChatClient({
           return;
         }
         if (typeof body.balanceSeconds === "number") setBalance(body.balanceSeconds);
+        if (body.backend) setBackend(body.backend);
       } catch {
         // transient network failure — the next tick retries
       }
@@ -477,6 +503,7 @@ export default function ChatClient({
         {balance !== null && balance < LOW_BALANCE_SECONDS && !lowToastDismissed && (
           <LowBalanceToast balance={balance} onBuy={() => setBuyOpen(true)} onDismiss={() => setLowToastDismissed(true)} />
         )}
+        {backend && <BackendPill backend={backend} />}
         <MessageList messages={messages} status={status} error={error} streaming={streaming} bottomRef={bottomRef} />
         <Composer input={input} setInput={setInput} streaming={streaming} onSend={send} />
       </section>

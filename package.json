@@ -8,8 +8,8 @@
     "start": "next start",
     "test": "vitest run",
     "build:worker": "opennextjs-cloudflare build",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview --config wrangler.preview.jsonc",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "preview": "NODE_OPTIONS=--disable-warning=DEP0190 opennextjs-cloudflare build && NODE_OPTIONS=--disable-warning=DEP0190 opennextjs-cloudflare preview --config wrangler.preview.jsonc",
+    "deploy": "NODE_OPTIONS=--disable-warning=DEP0190 opennextjs-cloudflare build && NODE_OPTIONS=--disable-warning=DEP0190 opennextjs-cloudflare deploy",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {

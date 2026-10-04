@@ -1,15 +1,20 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { logger } from "@/lib/logger";
+import { mapVastEvent, mentionsOtherInstance } from "@/lib/vast-events";
+import { podControl } from "@/lib/pod/control";
 
 /**
  * Vast.ai notification-webhook receiver (docs.vast.ai/notifications/webhooks).
  *
  * Vast.ai POSTs signed JSON events for subscribed notification types — we use
  * it for instance lifecycle visibility on the on-demand llama.cpp backend
- * (see src/lib/vast.ts): started/stopped/deleted, instance_offline/error_msgs,
- * low_credit, etc. The receiver is audit/alert only: it verifies, logs, and
- * forwards critical events to the ops alert sink (src/lib/alerts.ts). Pod
- * state itself is always re-read from the vast API, never driven from here.
+ * (see src/lib/vast.ts). Two consumers:
+ * - ops audit/alerting: verify, log, and let the critical events hit the ops
+ *   alert sink (src/lib/alerts.ts); Pod state itself is always re-read from
+ *   the vast API, never driven from here.
+ * - chat-box linkage: lifecycle events (started/stopped/offline/deleted…)
+ *   are mapped by src/lib/vast-events.ts and pushed to the PodController
+ *   DO, which /api/chat-presence relays to the chat box backend pill.
  *
  * Security contract (per the docs):
  * - HMAC-SHA256 over "<X-Vast-Timestamp>.<raw body bytes>" with the webhook
@@ -122,6 +127,24 @@ export async function POST(req: Request) {
     logger.error("vast event", { notifType, subject, message, eventId });
   } else {
     logger.info("vast event", { notifType, subject, message, eventId });
+  }
+
+  // Chat-box linkage: lifecycle events move the backend pill that the
+  // presence heartbeat relays. Ops-only types (low_credit, billing_failed,
+  // outbid…) map to null and stay out of the UI. Account-wide webhooks can
+  // target other instances — filter when the payload names a different one.
+  const mapped = mapVastEvent(notifType);
+  if (mapped && payload) {
+    if (mentionsOtherInstance(payload, process.env.VAST_INSTANCE_ID ?? "")) {
+      logger.debug("vast event: other instance, ignored for backend pill", { notifType, eventId });
+    } else {
+      try {
+        await podControl().saveVastEvent(mapped);
+      } catch {
+        // Notification must still 2xx: a failed ingestion only means a
+        // momentarily stale pill, retried implicitly by the next event.
+      }
+    }
   }
 
   // Accepted — answer fast; alerting happens via the logger's alert sink.

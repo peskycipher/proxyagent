@@ -1,0 +1,165 @@
+2026-10-03 14:53:52 UTC: ghcr.io/ggml-org/llama.cpp@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce: Pulling from ggml-org/llama.cpp
+2026-10-03 14:53:52 UTC: Digest: sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+Status: Image is up to date for ghcr.io/ggml-org/llama.cpp@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 14:53:52 UTC: ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 14:53:52 UTC: ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 14:53:53 UTC: #0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from ghcr.io_ggml-org_llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 14:53:53 UTC: #1 transferring dockerfile: 2.30kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 14:53:53 UTC: #2 DONE 0.6s
+2026-10-03 14:53:53 UTC: 
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/6] FROM ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+#4 resolve ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce 0.0s done
+2026-10-03 14:53:53 UTC: #4 DONE 0.0s
+
+#5 [4/6] RUN export DEBIAN_FRONTEND=noninteractive; for x in {0..30}; do apt-get install --no-install-recommends -y openssh-server tmux git wget curl less locales sudo software-properties-common rsync && break; sleep 1; done; exit 0;
+#5 CACHED
+
+#6 [5/6] RUN export DEBIAN_FRONTEND=noninteractive; 				env >> /etc/environment; 				echo VAST_CONTAINERLABEL='"$(cat ~/.vast_containerlabel)"' >> /root/.bashrc; 				sed -i "s/StrictModes yes/StrictModes no/g" /etc/ssh/sshd_config; 				echo ClientAliveInterval 10 >> /etc/ssh/sshd_config; 				echo ClientAliveCountMax 2 >> /etc/ssh/sshd_config; 				echo UsePAM no >> /etc/ssh/sshd_config; 				echo PasswordAuthentication no >> /etc/ssh/sshd_config; 				echo ChallengeResponseAuthentication no >> /etc/ssh/sshd_config; 				echo Banner /etc/banner >> /etc/ssh/sshd_config;         sed -i '/^[ \t]*LogLevel /d' /etc/ssh/sshd_config;         echo 'LogLevel VERBOSE' >> /etc/ssh/sshd_config; 				echo 'Welcome to vast.ai. If authentication fails, try again after a few 2026-10-03 14:53:53 UTC: seconds, and double check your ssh key.' > /etc/banner ; 				echo 'Have fun!' >> /etc/banner
+#6 CACHED
+
+#7 [2/6] RUN mkdir -p /tmp; chmod 1777 /tmp; exit 0;
+#7 CACHED
+
+#8 [3/6] RUN export DEBIAN_FRONTEND=noninteractive; apt-get update || echo 'V220614a: error during apt-get update!';
+#8 CACHED
+
+#9 [6/6] RUN echo 'PS1="\[\e]0;\u@$VAST_CONTAINERLABEL: \w\a\]\[\e[01;34m\]\u\[\e[m\e[01m\]@\[\e[01;36m\]$VAST_CONTAINERLABEL\[\e[m\e[01m\]:\[\e[01;37m\]\w\$\[\e[m\] " ; if [ ! -e "$HOME/.no_auto_tmux" ] && [[ -z "$TMUX" ]] && [ "$SSH_CONNECTION" != "" ] && [ "$TMUX_STARTED" = "" ]; then tmux attach-session -t ssh_tmux || tmux new-session -s ssh_tmux; exit; elif ! [[ -z "$TMUX" ]]; then echo '"'"'Welcome to your vast.ai container! This session is running in `tmux`.'"'"'; echo '"'"'To disconnect without closing your processes, press ctrl+b, release, then d.'"'"'; echo '"'"'To disable auto-tmux, run `touch ~/.no_auto_tmux` and reconnect. See also https://tmuxcheatsheet.com/'"'"'; fi; ' >> ~/.bashrc
+2026-10-03 14:53:54 UTC: #9 CACHED
+
+#10 exporting to image
+2026-10-03 14:53:54 UTC: #10 exporting layers 0.0s done
+#10 exporting manifest sha256:bbe614c7db08911936905b0b3351e3e07ac229f1fb1fee1396c1537f9e67a046 done
+#10 exporting config sha256:7925ef3291e460ee6a528e6fd40faffa58f1943220304fb383724558c2660b5e done
+#10 exporting attestation manifest sha256:4edeb4881e7cd144eb7740ecde455d30daeed4c66186482e469cf2240acecd9f 0.1s done
+#10 exporting manifest list sha256:c89b91274a6121593919d911eeefcf2be7734844621b6fe9682fa66977797165
+2026-10-03 14:53:54 UTC: #10 exporting manifest list sha256:c89b91274a6121593919d911eeefcf2be7734844621b6fe9682fa66977797165 0.0s done
+#10 naming to ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh:latest done
+#10 unpacking to ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh:latest 0.0s done
+#10 DONE 0.3s
+2026-10-03 14:53:54 UTC: 
+ [33m1 warning found (use docker --debug to expand):
+[0m - JSONArgsRecommended: JSON arguments recommended for ENTRYPOINT to prevent unintended behavior related to OS signals (line 22)
+2026-10-03 14:53:54 UTC: #10 exporting manifest list sha256:c89b91274a6121593919d911eeefcf2be7734844621b6fe9682fa66977797165 0.0s done
+#10 naming to ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh:latest done
+#10 unpacking to ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh:latest 0.0s done
+#10 DONE 0.3s
+2026-10-03 14:53:54 UTC: d2c74617356d2aa24e44779535e97dbf53193a3490cd6add29b609d9f7d31b1e
+2026-10-03 14:53:54 UTC: Successfully loaded ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce2026-10-03 14:54:02 UTC: C.54026402
+2026-10-03 14:54:02 UTC: success, running ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh2026-10-03 22:01:15 UTC: ghcr.io/ggml-org/llama.cpp@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce: Pulling from ggml-org/llama.cpp
+2026-10-03 22:01:15 UTC: Digest: sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 22:01:15 UTC: Status: Image is up to date for ghcr.io/ggml-org/llama.cpp@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 22:01:15 UTC: ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 22:01:15 UTC: ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 22:01:16 UTC: #0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from ghcr.io_ggml-org_llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 22:01:16 UTC: #1 transferring dockerfile: 2.30kB done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 22:01:16 UTC: #2 DONE 0.6s
+2026-10-03 22:01:16 UTC: 
+#3 [internal] load .dockerignore
+2026-10-03 22:01:16 UTC: #3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/6] FROM ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+#4 resolve ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce 0.0s done
+#4 DONE 0.0s
+
+#5 [5/6] RUN export DEBIAN_FRONTEND=noninteractive; 				env >> /etc/environment; 				echo VAST_CONTAINERLABEL='"$(cat ~/.vast_containerlabel)"' >> /root/.bashrc; 				sed -i "s/StrictModes yes/StrictModes no/g" /etc/ssh/sshd_config; 				echo ClientAliveInterval 10 >> /etc/ssh/sshd_config; 				echo ClientAliveCountMax 2 >> /etc/ssh/sshd_config; 				echo UsePAM no >> /etc/ssh/sshd_config; 				echo PasswordAuthentication no >> /etc/ssh/sshd_config; 				echo ChallengeResponseAuthentication no >> /etc/ssh/sshd_config; 				echo Banner /etc/banner >> /etc/ssh/sshd_config;         sed -i '/^[ \t]*LogLevel /d' /etc/ssh/sshd_config;         echo 'LogLevel VERBOSE' >> /etc/ssh/sshd_config; 				echo 'Welcome to v2026-10-03 22:01:16 UTC: ast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.' > /etc/banner ; 				echo 'Have fun!' >> /etc/banner
+#5 CACHED
+
+#6 [2/6] RUN mkdir -p /tmp; chmod 1777 /tmp; exit 0;
+#6 CACHED
+
+#7 [3/6] RUN export DEBIAN_FRONTEND=noninteractive; apt-get update || echo 'V220614a: error during apt-get update!';
+#7 CACHED
+
+#8 [4/6] RUN export DEBIAN_FRONTEND=noninteractive; for x in {0..30}; do apt-get install --no-install-recommends -y openssh-server tmux git wget curl less locales sudo software-properties-common rsync && break; sleep 1; done; exit 0;
+#8 CACHED
+
+#9 [6/6] RUN echo 'PS1="\[\e]0;\u@$VAST_CONTAINERLABEL: \w\a\]\[\e[01;34m\]\u\[\e[m\e[01m\]@\[\e[01;36m\]$VAST_CONTAINERLABEL\[\e[m\e[01m\]:\[\e[01;37m\]\w\$\[\e[m\] " ; if [ ! -e "$HOME/.no_auto_tmux" ] && [[ -z "$TMUX" ]] && [ "$SSH_CONNECTION" != "" ] && [ "$TMUX_STARTED" = "" ]; then tmux attach-session -t ssh_tmux || tmux new-session -s ssh_tmux; exit; elif ! [[ -z "$TMUX" ]]; then echo '"'"'Welcome to your vast.ai con2026-10-03 22:01:16 UTC: tainer! This session is running in `tmux`.'"'"'; echo '"'"'To disconnect without closing your processes, press ctrl+b, release, then d.'"'"'; echo '"'"'To disable auto-tmux, run `touch ~/.no_auto_tmux` and reconnect. See also https://tmuxcheatsheet.com/'"'"'; fi; ' >> ~/.bashrc
+2026-10-03 22:01:16 UTC: #9 CACHED
+
+#10 exporting to image
+#10 exporting layers 0.0s done
+#10 exporting manifest sha256:bbe614c7db08911936905b0b3351e3e07ac229f1fb1fee1396c1537f9e67a046 done
+2026-10-03 22:01:16 UTC: #10 exporting config sha256:7925ef3291e460ee6a528e6fd40faffa58f1943220304fb383724558c2660b5e done
+#10 exporting attestation manifest sha256:d0f8bef090d77b39924945b29c9d054dce62423ebbbadf23a5efe81df9dbc62f 0.1s done
+#10 exporting manifest list sha256:b6aa85a876b84070f8026df3b381da70866936bf5901b4baaca8484351e843da
+2026-10-03 22:01:17 UTC: #10 exporting manifest list sha256:b6aa85a876b84070f8026df3b381da70866936bf5901b4baaca8484351e843da 0.0s done
+#10 naming to ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh:latest done
+#10 unpacking to ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh:latest 0.0s done
+2026-10-03 22:01:17 UTC: #10 DONE 0.3s
+2026-10-03 22:01:17 UTC: 
+ [33m1 warning found (use docker --debug to expand):
+[0m - JSONArgsRecommended: JSON arguments recommended for ENTRYPOINT to prevent unintended behavior related to OS signals (line 22)
+2026-10-03 22:01:17 UTC: #10 DONE 0.3s
+2026-10-03 22:01:17 UTC: 4a56ea67398f7fe37dccc38abc931cf36589be30f7d6fa5066c6ec13141b8007
+2026-10-03 22:01:17 UTC: Successfully loaded ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce2026-10-03 22:01:24 UTC: C.54026402
+2026-10-03 22:01:24 UTC: success, running ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh2026-10-03 23:20:47 UTC: ghcr.io/ggml-org/llama.cpp@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce: Pulling from ggml-org/llama.cpp
+2026-10-03 23:20:47 UTC: Digest: sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 23:20:47 UTC: Status: Image is up to date for ghcr.io/ggml-org/llama.cpp@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 23:20:47 UTC: ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 23:20:47 UTC: ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 23:20:48 UTC: #0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from ghcr.io_ggml-org_llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+#1 transferring dockerfile: 2.30kB done
+2026-10-03 23:20:48 UTC: #1 DONE 0.0s
+
+#2 [internal] load metadata for ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+2026-10-03 23:20:48 UTC: #2 DONE 0.6s
+2026-10-03 23:20:48 UTC: 
+#3 [internal] load .dockerignore
+2026-10-03 23:20:48 UTC: #3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/6] FROM ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce
+#4 resolve ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce 0.0s done
+#4 DONE 0.0s
+
+#5 [4/6] RUN export DEBIAN_FRONTEND=noninteractive; for x in {0..30}; do apt-get install --no-install-recommends -y openssh-server tmux git wget curl less locales sudo software-properties-common rsync && break; sleep 1; done; exit 0;
+#5 CACHED
+
+#6 [5/6] RUN export DEBIAN_FRONTEND=noninteractive; 				env >> /etc/environment; 				echo VAST_CONTAINERLABEL='"$(cat ~/.vast_containerlabel)"' >> /root/.bashrc; 				sed -i "s/StrictModes yes/StrictModes no/g" /etc/ssh/sshd_config; 				echo ClientAliveInterval 10 >> /etc/ssh/sshd_config; 				echo ClientAliveCountMax 2 >> /etc/ssh/sshd_config; 				echo UsePAM no >> /etc/ssh/sshd_config; 				echo PasswordAuthentication no >> /etc/ssh/sshd_config; 				echo Challe2026-10-03 23:20:48 UTC: ngeResponseAuthentication no >> /etc/ssh/sshd_config; 				echo Banner /etc/banner >> /etc/ssh/sshd_config;         sed -i '/^[ \t]*LogLevel /d' /etc/ssh/sshd_config;         echo 'LogLevel VERBOSE' >> /etc/ssh/sshd_config; 				echo 'Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.' > /etc/banner ; 				echo 'Have fun!' >> /etc/banner
+#6 CACHED
+
+#7 [2/6] RUN mkdir -p /tmp; chmod 1777 /tmp; exit 0;
+#7 CACHED
+
+#8 [3/6] RUN export DEBIAN_FRONTEND=noninteractive; apt-get update || echo 'V220614a: error during apt-get update!';
+#8 CACHED
+
+#9 [6/6] RUN echo 'PS1="\[\e]0;\u@$VAST_CONTAINERLABEL: \w\a\]\[\e[01;34m\]\u\[\e[m\e[01m\]@\[\e[01;36m\]$VAST_CONTAINERLABEL\[\e[m\e[01m\]:\[\e[01;37m\]\w\$\[\e[m\] " ; if [ ! -e "$HOME/.no_auto_tmux" ] && [[ -z "$TMUX" ]] && [ "$SSH_CONNECTION" != "" ] && [ "$TMUX_STARTED" = "" ]; then tmux attach-session -t ssh_tmux || tmux new-session -s ssh_tmux; exit; elif ! [[ -z "$TMUX" ]]; then echo '"'"'Welcome to your vast.ai con2026-10-03 23:20:48 UTC: tainer! This session is running in `tmux`.'"'"'; echo '"'"'To disconnect without closing your processes, press ctrl+b, release, then d.'"'"'; echo '"'"'To disable auto-tmux, run `touch ~/.no_auto_tmux` and reconnect. See also https://tmuxcheatsheet.com/'"'"'; fi; ' >> ~/.bashrc
+2026-10-03 23:20:49 UTC: #9 CACHED
+
+#10 exporting to image
+#10 exporting layers 0.0s done
+#10 exporting manifest sha256:bbe614c7db08911936905b0b3351e3e07ac229f1fb1fee1396c1537f9e67a046 done
+#10 exporting config sha256:7925ef3291e460ee6a528e6fd40faffa58f1943220304fb383724558c2660b5e done
+#10 exporting attestation manifest sha256:eb68d682549c9eedaa4c97dd7ec42804f612ec846917b1870a33841436a2079b 0.1s done
+2026-10-03 23:20:49 UTC: #10 exporting manifest list sha256:4e7cbd8e84a18aca224f3df1d75aa1ab04e2d0601e91ceee176f5d77e8b5ae26 0.0s done
+#10 naming to ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh:latest done
+#10 unpacking to ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh:latest 0.1s done
+#10 DONE 0.3s
+2026-10-03 23:20:49 UTC: 
+ [33m1 warning found (use docker --debug to expand):
+[0m - JSONArgsRecommended: JSON arguments recommended for ENTRYPOINT to prevent unintended behavior related to OS signals (line 22)
+2026-10-03 23:20:49 UTC: #10 exporting manifest list sha256:4e7cbd8e84a18aca224f3df1d75aa1ab04e2d0601e91ceee176f5d77e8b5ae26 0.0s done
+#10 naming to ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh:latest done
+#10 unpacking to ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh:latest 0.1s done
+#10 DONE 0.3s
+2026-10-03 23:20:49 UTC: 60183b1492b2950de53a4e8f3e8ce13ba1350b3a24898fc316645c02ddaa8692
+2026-10-03 23:20:49 UTC: Successfully loaded ghcr.io/ggml-org/llama.cpp:full-cuda@sha256:6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce2026-10-03 23:20:56 UTC: C.54026402
+2026-10-03 23:20:56 UTC: success, running ghcr.io/ggml-org/llama.cpp_full-cuda_sha256_6505ef7cd418bc630026bd40234ea0145b068b9d4e4ab222aa0aa168ffe7ecce/ssh

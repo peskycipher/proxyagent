@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser, unauthorized } from "@/lib/route-session";
 import { openTick } from "@/lib/chat-presence";
+import { podControl } from "@/lib/pod/control";
 
 /**
  * Chat page presence heartbeat. The client POSTs every ~10s while /chat is
@@ -15,7 +16,10 @@ export async function POST() {
 
   try {
     const balanceSeconds = await openTick(userId, Date.now());
-    return NextResponse.json({ balanceSeconds });
+    // Last-known backend instance state (vast.ai webhook-fed) so the chat box
+    // stays linked to the running llama instance. null → UI hides the pill.
+    const backend = await podControl().backendStatus();
+    return NextResponse.json({ balanceSeconds, backend });
   } catch (err) {
     if (err instanceof Error && /insufficient/i.test(err.message)) {
       return NextResponse.json({ balanceSeconds: 0 }, { status: 402 });

@@ -87,7 +87,11 @@ export async function modelChat(
   messages: Array<{ role: string; content: string }>,
   signal: AbortSignal,
 ): Promise<Response> {
-  const body = JSON.stringify({ stream: true, messages });
+  // llama.cpp ≥0.5.0-dev rejects requests without an explicit model name
+  // ("model name is missing from the request"). The value must match the
+  // instance's llama-server --alias (LLAMA_MODEL_ID), else "model not found".
+  const model = process.env.LLAMA_MODEL_ID;
+  const body = JSON.stringify(model ? { stream: true, model, messages } : { stream: true, messages });
   return fetch(`${await llamaBase()}/v1/chat/completions`, {
     method: "POST",
     headers: llamaHeaders(),

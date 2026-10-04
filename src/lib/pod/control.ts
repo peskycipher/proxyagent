@@ -3,6 +3,7 @@ import { getPod, startPod, stopPod, isConflict } from "./backend";
 import { logger } from "@/lib/logger";
 import { decideStart, type EnsureRunningResult } from "./logic";
 import type { PodController } from "./PodController";
+import type { BackendEvent } from "../vast-events";
 
 /**
  * Pod control driver selection.
@@ -28,6 +29,10 @@ interface PodControl {
   beginStream(userId: string): Promise<void>;
   renewStream(userId: string): Promise<void>;
   endStream(userId: string): Promise<void>;
+  /** Ingest a verified vast.ai webhook event (chat-box backend pill). */
+  saveVastEvent(e: BackendEvent): Promise<void>;
+  /** Last-known backend state for the chat box, health-verified when stale. */
+  backendStatus(): Promise<BackendEvent | null>;
 }
 
 const IDLE_TIMEOUT_MS = () => Number(process.env.POD_IDLE_TIMEOUT_SECONDS || 600) * 1000;
@@ -86,6 +91,8 @@ const durable: PodControl = {
   beginStream: (userId) => run("beginStream", (s) => s.beginStream(userId)).then(() => undefined),
   renewStream: (userId) => run("renewStream", (s) => s.renewStream(userId)).then(() => undefined),
   endStream: (userId) => run("endStream", (s) => s.endStream(userId)).then(() => undefined),
+  saveVastEvent: (e) => run("saveVastEvent", (s) => s.saveVastEvent(e)).then(() => undefined),
+  backendStatus: () => run("backendStatus", (s) => s.backendStatus()).then((r) => r ?? null),
   async ensureRunning() {
     const stub = doStub();
     if (!stub) return inline.ensureRunning();
@@ -102,6 +109,8 @@ const durable: PodControl = {
 
 let lastActivityAt = 0;
 let idleStopperStarted = false;
+/** Inline-mode backend state (dev/degraded — same-isolate only). */
+let inlineBackendEvent: BackendEvent | null = null;
 
 const inline: PodControl = {
   async touchActivity() {
@@ -133,6 +142,12 @@ const inline: PodControl = {
   async beginStream() {},
   async renewStream() {},
   async endStream() {},
+  async saveVastEvent(e) {
+    inlineBackendEvent = e;
+  },
+  async backendStatus() {
+    return inlineBackendEvent;
+  },
 };
 
 function startInlineIdleStopper(): void {

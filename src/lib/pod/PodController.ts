@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { getPod, startPod, stopPod, isConflict, llamaHealthy } from "./backend";
+import type { BackendEvent } from "../vast-events";
 import { logger } from "@/lib/logger";
 import { track } from "@/lib/telemetry";
 import {
@@ -30,6 +31,11 @@ interface StatusCache {
   actions: string[];
   at: number;
 }
+
+/** How long a non-live health-probe result is trusted across heartbeats. */
+const BACKEND_PROBE_TTL_MS = 20_000;
+/** Fresh "live" event replaces this many ms after arrival. */
+const BACKEND_EVENT_FRESH_MS = 12 * 60_000;
 
 const idleTimeoutMs = () => Number(process.env.POD_IDLE_TIMEOUT_SECONDS || 600) * 1000;
 
@@ -126,6 +132,51 @@ export class PodController extends DurableObject {
   }
 
   private lastTouchWrite = 0;
+
+  /**
+   * Ingest a verified vast.ai webhook event (see src/lib/vast-events.ts).
+   * Stores the latest backend event and drops the RUNNING statusCache so
+   * ensureRunning re-reads ground truth immediately after a stop/offline —
+   * no 10s window of stale "RUNNING" trust after vast knows it's down.
+   */
+  async saveVastEvent(e: BackendEvent): Promise<void> {
+    await this.ctx.storage.put("backendEvent", e);
+    if (e.state !== "live") await this.ctx.storage.delete("statusCache");
+  }
+
+  /**
+   * Last-known backend state for the chat box (relayed by /api/chat-presence).
+   * Vast events are point-in-time and the instance sometimes self-recovers
+   * (the budget host is known to flap), so a non-"live" stored event is
+   * re-verified against llama-server health ground truth before being
+   * reported — a passing probe upgrades the state to live. Probe results are
+   * cached for BACKEND_PROBE_TTL_MS so heartbeat bursts don't hammer
+   * llama-server. Unknown (no event seen yet) → null; UI hides the pill.
+   */
+  async backendStatus(): Promise<BackendEvent | null> {
+    const e = await this.ctx.storage.get<BackendEvent>("backendEvent");
+    if (!e) return null;
+    if (e.state === "live" && Date.now() - e.at < BACKEND_EVENT_FRESH_MS) return e;
+
+    const now = Date.now();
+    if (now - this.backendProbe.at >= BACKEND_PROBE_TTL_MS) {
+      let healthy = false;
+      try {
+        healthy = await llamaHealthy();
+      } catch {
+        healthy = false;
+      }
+      this.backendProbe = { at: now, healthy };
+    }
+    if (this.backendProbe.healthy) {
+      const live: BackendEvent = { state: "live", detail: "instance online", notifType: "health_probe", at: now };
+      await this.ctx.storage.put("backendEvent", live);
+      return live;
+    }
+    return e;
+  }
+
+  private backendProbe: { at: number; healthy: boolean } = { at: 0, healthy: false };
 
   async beginStream(userId: string): Promise<void> {
     await this.ctx.storage.put(`${LEASE_PREFIX}${userId}`, Date.now() + STREAM_LEASE_TTL_MS);

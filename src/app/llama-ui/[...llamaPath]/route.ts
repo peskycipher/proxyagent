@@ -1,16 +1,10 @@
 import { requireUser, unauthorized } from "@/lib/route-session";
-import { balanceSeconds, debit } from "@/lib/credits";
 import {
   touchModelActivity,
   beginModelStream,
-  renewModelStream,
-  endModelStream,
 } from "@/lib/inference";
-import { Meter } from "@/lib/meter";
-import { pauseStream, resumeStream } from "@/lib/chat-presence";
-import { acquireChatLock, releaseChatLock, renewChatLock, CHAT_LOCK_RENEW_INTERVAL_MS } from "@/lib/chat-lock";
+import { billedStreamGate, BilledStream } from "@/lib/billed-stream";
 import { getDb, newId } from "@/lib/db";
-import { logger } from "@/lib/logger";
 import { track } from "@/lib/telemetry";
 import { llamaBase } from "@/lib/vast";
 
@@ -102,29 +96,31 @@ export async function GET(request: Request, ctx: { params: Promise<{ llamaPath: 
   if (!user) return unauthorized();
   const llamaPath = (await ctx.params).llamaPath.join("/");
   // WebUI fetches props via GET. Inject auth instead of trusting the client.
+  // llama-server's built-in tools are AS ROOT on the pod — they are never
+  // exposed to tenants; short-circuit the WebUI's tools fetch with an empty
+  // list so its console error goes away without enabling the feature.
+  if (llamaPath === "tools") {
+    // ToolsStore maps over the RAW response body (e.map(r=>r.definition)) —
+    // the response must be a bare JSON array, not {object,tools}.
+    return Response.json([], { headers: { "cache-control": "no-store" } });
+  }
   return passthrough(request, llamaPath, "GET");
 }
 
 /**
  * Billing-gated pass-through of an OpenAI streaming completion.
- * Reuses /api/chat's lifecycle: per-user lock, balance gate, stop-loss capped
- * at pre-stream balance, warmup before the stream, lease touches, page-clock
- * pause/resume, metered debit, and a transcript audit row. Differences from
- * /api/chat: the SSE payload is passed through byte-identical (the WebUI is a
- * native OpenAI SSE client), and threads live browser-side — we persist only
- * a flat audit transcript (one chat row per completion).
+ * Lifecycle (per-user lock, balance gate, stop-loss capped at pre-stream
+ * balance, lease touches, page-clock pause/resume, metered debit) lives in
+ * lib/billed-stream.ts, identical to /api/chat. Differences from /api/chat:
+ * the SSE payload is passed through byte-identical (the WebUI is a native
+ * OpenAI SSE client), and threads live browser-side — we persist only a flat
+ * audit transcript (one chat row per completion).
  */
 async function proxyBillingCompletion(request: Request, userId: string, llamaPath: string): Promise<Response> {
-  if (!(await acquireChatLock(userId))) {
-    track("llamaproxy.rejected", { "app.user.id": userId, "app.reason": "already_streaming" });
-    return Response.json({ error: "another request is already streaming for this account" }, { status: 429 });
-  }
-
-  const balance = await balanceSeconds(userId);
-  if (balance < 1) {
-    track("llamaproxy.rejected", { "app.user.id": userId, "app.reason": "insufficient_credits" });
-    return Response.json({ error: "insufficient credits — buy more time in the portal" }, { status: 402 });
-  }
+  // One stream per account + credit gate, shared with /api/chat.
+  const gate = await billedStreamGate("llamaproxy", userId);
+  if (gate instanceof Response) return gate;
+  const balance = gate.balance;
 
   const rawBody = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!rawBody) return Response.json({ error: "invalid request" }, { status: 400 });
@@ -143,29 +139,15 @@ async function proxyBillingCompletion(request: Request, userId: string, llamaPat
     );
   }
 
-  const aborter = new AbortController();
-  const stopLoss = setTimeout(() => aborter.abort(), Math.max(1, balance) * 1000);
-
-  const heartbeat = setInterval(() => {
-    renewChatLock(userId).catch((e) => logger.error("llama proxy lock renew failed", { userId, error: (e as Error).message }));
-    renewModelStream(userId);
-  }, CHAT_LOCK_RENEW_INTERVAL_MS);
-
+  // Lifecycle (stop-loss abort, lock/lease heartbeat, metered debit, page-clock
+  // resume, lock release) lives in lib/billed-stream.ts; this route supplies
+  // only the audit-row persistence and completed event via the finalize callback.
+  const bs = new BilledStream({ source: "llamaproxy", userId, chatId, balance, debitRef: `llamaproxy:${chatId}` });
   const startedAt = Date.now();
-  let billed = 0;
-  let cleanedUp = false;
   let assistantContent = "";
 
   const cleanup = async () => {
-    if (cleanedUp) return;
-    cleanedUp = true;
-    clearTimeout(stopLoss);
-    clearInterval(heartbeat);
-    endModelStream(userId);
-    try {
-      billed = meter?.stop() ?? 0;
-      if (billed > 0) await debit(userId, billed, `llamaproxy:${chatId}`);
-      await resumeStream(userId, Date.now());
+    await bs.cleanup(async (billed) => {
       if (assistantContent) {
         await db.run(
           "INSERT INTO messages (id, chat_id, role, content, billed_seconds, created_at) VALUES (?,?,?,?,?,?)",
@@ -178,32 +160,19 @@ async function proxyBillingCompletion(request: Request, userId: string, llamaPat
         "app.chat.billed_seconds": billed,
         "app.chat.duration_ms": Date.now() - startedAt,
       });
-    } catch (e) {
-      logger.error("llama proxy cleanup error", { chatId, error: (e as Error).message });
-    }
-    try {
-      await releaseChatLock(userId);
-    } catch (e) {
-      logger.error("llama proxy lock release failed", { userId, error: (e as Error).message });
-    }
+    });
   };
-
-  let meter: Meter | null = null;
 
   const upstream = await fetch(`${await llamaBase()}/${llamaPath}`, {
     method: "POST",
     headers: await upstreamAuth({ "content-type": "application/json" }),
     body: JSON.stringify(rawBody),
-    signal: aborter.signal,
+    signal: bs.aborter.signal,
   });
 
   if (!upstream.ok || !upstream.body) {
-    clearTimeout(stopLoss);
-    clearInterval(heartbeat);
-    endModelStream(userId);
     track("llamaproxy.failed", { "app.chat.id": chatId, "app.upstream_status": upstream.status });
-    try { await releaseChatLock(userId); } catch { /* lock TTL lapses */ }
-    try { await resumeStream(userId, Date.now()); } catch { /* best-effort */ }
+    await bs.cleanup(); // no meter yet — teardown only
     return new Response(upstream.body, { status: upstream.status, headers: passthroughHeaders(upstream) });
   }
 
@@ -217,10 +186,7 @@ async function proxyBillingCompletion(request: Request, userId: string, llamaPat
   const passthroughStream = new TransformStream<Uint8Array, Uint8Array>({
     transform(chunk, controller) {
       touchModelActivity();
-      if (meter === null) {
-        meter = new Meter();
-        pauseStream(userId); // the stream meter owns these seconds now
-      }
+      bs.startMetering(); // no-op after the first chunk; freezes the page-open meter
       // Collect assistant text for the audit row while passing bytes through.
       const text = decoder.decode(chunk, { stream: true });
       for (const line of text.split("\n")) {

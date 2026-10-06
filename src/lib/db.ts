@@ -33,18 +33,35 @@ type SqliteDb = import("better-sqlite3").Database;
 function localDriver(db: SqliteDb): Db {
   return {
     async get<T>(sql: string, ...params: unknown[]): Promise<T | undefined> {
-      return db.prepare(sql).get(...params) as T | undefined;
+      try {
+        return db.prepare(sql).get(...params) as T | undefined;
+      } catch (e) {
+        throw new Error(`db.get error: ${e instanceof Error ? e.message : String(e)}`);
+      }
     },
     async all<T>(sql: string, ...params: unknown[]): Promise<T[]> {
-      return db.prepare(sql).all(...params) as T[];
+      try {
+        return db.prepare(sql).all(...params) as T[];
+      } catch (e) {
+        throw new Error(`db.all error: ${e instanceof Error ? e.message : String(e)}`);
+      }
     },
     async run(sql: string, ...params: unknown[]): Promise<DbRunResult> {
-      const res = db.prepare(sql).run(...params);
-      return { changes: res.changes };
+      try {
+        const res = db.prepare(sql).run(...params);
+        return { changes: res.changes };
+      } catch (e) {
+        throw new Error(`db.run error: ${e instanceof Error ? e.message : String(e)}`);
+      }
     },
     async batch(stmts: DbStmt[]): Promise<DbRunResult[]> {
-      const txn = db.transaction((list: DbStmt[]) => list.map((s) => db.prepare(s.sql).run(...(s.params ?? []))));
-      return txn(stmts).map((r) => ({ changes: r.changes }));
+      const stmt = (s: DbStmt) => db.prepare(s.sql).run(...(s.params ?? []));
+      try {
+        const txn = db.transaction((list: DbStmt[]) => list.map(stmt));
+        return txn(stmts).map((r) => ({ changes: r.changes }));
+      } catch (e) {
+        throw new Error(`db.batch error: ${e instanceof Error ? e.message : String(e)}`);
+      }
     },
   };
 }

@@ -157,3 +157,38 @@ describe("convertFiat (USD -> display currency)", () => {
     }
   });
 });
+
+describe("coinToUsd (coin -> USD reconciliation fallback)", () => {
+  let gateway: typeof import("@/lib/gateway");
+
+  beforeEach(async () => {
+    gateway = await import("@/lib/gateway");
+  });
+
+  it("converts a coin amount to USD via the global convert endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ value_coin: "102.5" }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      expect(await gateway.coinToUsd("btc", 0.001)).toBeCloseTo(102.5, 10);
+      expect(fetchMock.mock.calls[0][0]).toContain("/convert/?value=0.001&from=btc&to=usd");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("returns null on failure or invalid input", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      expect(await gateway.coinToUsd("btc", 0.001)).toBeNull(); // fetch throws
+      expect(await gateway.coinToUsd("btc", 0)).toBeNull(); // invalid input, no fetch
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

@@ -6,7 +6,7 @@ import { createVerify } from "node:crypto";
  *       https://docs.cryptapi.io/webhooks/verify-webhook-signature
  */
 
-const CRYPTAPI_API_BASE = process.env.CRYPTAPI_API_BASE || "https://api.cryptapi.io";
+// defined via apiBase()
 
 /** Base URL of the CryptAPI API (overridable for staging/tests). */
 export function apiBase(): string {
@@ -47,18 +47,12 @@ export interface Charge {
 export async function convertUsdToCoin(coin: string, usd: number): Promise<number | null> {
   if (!Number.isFinite(usd) || usd <= 0) return null;
   const ticker = tickerPath(coin);
-  try {
-    const res = await fetch(
-      `${CRYPTAPI_API_BASE}/${ticker}/convert/?value=${encodeURIComponent(usd)}&from=USD`,
-      { signal: AbortSignal.timeout(10000) },
-    );
-    if (!res.ok) return null;
-    const body = (await res.json()) as { value_coin?: number | string };
-    const v = Number(body.value_coin);
-    return Number.isFinite(v) && v > 0 ? v : null;
-  } catch {
-    return null;
-  }
+  const body = await fetchJson<{ value_coin?: number | string }>(
+    `${apiBase()}/${ticker}/convert/?value=${encodeURIComponent(usd)}&from=USD`,
+    10_000,
+  );
+  if (!body) return null;
+  return parseValueCoin(body.value_coin);
 }
 
 /**
@@ -68,6 +62,26 @@ export async function convertUsdToCoin(coin: string, usd: number): Promise<numbe
 const NATIVE_TICKER_PATHS: Record<string, string> = {
   sol: "sol/sol",
 };
+
+/**
+ * Fetch a JSON payload with a timeout; on error or non‑2xx return `null`.
+ * Small helper that all conversion functions can reuse.
+ */
+async function fetchJson<T = any>(url: string, timeoutMs = 10_000): Promise<T | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+/** Parse a CryptAPI `value_coin` numeric field; positive finite number or null. */
+function parseValueCoin(raw: unknown): number | null {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 /**
  * Coin id -> CryptAPI ticker: the last underscore becomes a path segment, so
@@ -86,7 +100,7 @@ export async function createCharge(params: CreateChargeParams): Promise<Charge> 
   const ticker = tickerPath(coin);
   let url: URL;
   try {
-    url = new URL(`${CRYPTAPI_API_BASE}/${ticker}/create/`);
+    url = new URL(`${apiBase()}/${ticker}/create/`);
   } catch {
     throw new Error(`invalid gateway ticker for coin ${coin}`);
   }
@@ -122,18 +136,12 @@ export async function createCharge(params: CreateChargeParams): Promise<Charge> 
  */
 export async function convertFiat(usd: number, to: string): Promise<number | null> {
   if (!Number.isFinite(usd) || usd <= 0) return null;
-  try {
-    const res = await fetch(
-      `${apiBase()}/convert/?value=${encodeURIComponent(usd)}&from=usd&to=${encodeURIComponent(to.toLowerCase())}`,
-      { signal: AbortSignal.timeout(10000) },
-    );
-    if (!res.ok) return null;
-    const body = (await res.json()) as { value_coin?: number | string };
-    const v = Number(body.value_coin);
-    return Number.isFinite(v) && v > 0 ? v : null;
-  } catch {
-    return null;
-  }
+  const body = await fetchJson<{ value_coin?: number | string }>(
+    `${apiBase()}/convert/?value=${encodeURIComponent(usd)}&from=usd&to=${encodeURIComponent(to.toLowerCase())}`,
+    10_000,
+  );
+  if (!body) return null;
+  return parseValueCoin(body.value_coin);
 }
 
 /** Display currencies for the portal price selector (subset of docs/convert.md). */
@@ -254,18 +262,12 @@ export async function getGatewayLogs(coin: string, callbackUrl: string): Promise
  */
 export async function coinToUsd(coin: string, value: number): Promise<number | null> {
   if (!Number.isFinite(value) || value <= 0) return null;
-  try {
-    const res = await fetch(
-      `${apiBase()}/convert/?value=${encodeURIComponent(value)}&from=${encodeURIComponent(tickerFor(coin))}&to=usd`,
-      { signal: AbortSignal.timeout(10000) },
-    );
-    if (!res.ok) return null;
-    const body = (await res.json()) as { value_coin?: number | string };
-    const usd = Number(body.value_coin);
-    return Number.isFinite(usd) && usd > 0 ? usd : null;
-  } catch {
-    return null;
-  }
+  const body = await fetchJson<{ value_coin?: number | string }>(
+    `${apiBase()}/convert/?value=${encodeURIComponent(value)}&from=${encodeURIComponent(tickerFor(coin))}&to=usd`,
+    10_000,
+  );
+  if (!body) return null;
+  return parseValueCoin(body.value_coin);
 }
 
 /**

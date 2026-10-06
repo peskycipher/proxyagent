@@ -2,18 +2,22 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 // Env-var NAMES read via process.env; test values are fake wallets ("bc1qxtest"). No credentials in this file.
 const WALLETS = ["CRYPTAPI_WALLETS_BTC", "CRYPTAPI_WALLETS_TRC20_USDT"]; // gitleaks:allow
+// The operator's shell may export real CRYPTAPI_WALLETS_* vars (ltc, sol, zec):
+// scrub them per-test so the two fixture wallets fully determine acceptedCoins().
+const ENV_WALLET_KEYS = Object.keys(process.env).filter((k) => k.startsWith("CRYPTAPI_WALLETS_"));
 
 describe("coin id -> CryptAPI ticker mapping", () => {
   let gateway: typeof import("@/lib/gateway");
 
   beforeEach(async () => {
+    for (const k of ENV_WALLET_KEYS) delete process.env[k];
     process.env.CRYPTAPI_WALLETS_BTC = "bc1qxtest";
     process.env.CRYPTAPI_WALLETS_TRC20_USDT = "TXtest";
     gateway = await import("@/lib/gateway");
   });
 
   afterEach(() => {
-    for (const k of WALLETS) delete process.env[k];
+    for (const k of [...WALLETS, ...ENV_WALLET_KEYS]) delete process.env[k];
   });
 
   it("maps network-qualified coin ids to CryptAPI ticker paths", () => {

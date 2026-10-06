@@ -83,13 +83,19 @@ export async function getPod(): Promise<{ status: string; runtimeStatus: string 
   const res = await vastFetch("/");
   if (!res.ok) throw new VastError(`getPod failed: ${res.status} ${await res.text().catch(() => "")}`, res.status);
   const body = (await res.json()) as {
-    instances?: { cur_state?: string; public_ipaddr?: string | null; ports?: Record<string, Array<{ HostPort?: number }>> };
+    instances?: {
+      cur_state?: string;
+      public_ipaddr?: string | null;
+      ports?: Record<string, Array<{ HostPort?: number }>>;
+      machine_id?: string | number;
+    };
   };
   const ins = body.instances ?? {};
   if (ins.cur_state === "error") {
-    // Measurable, not just mapped: recurring occurrences on host 27389 are
-    // queryable on the Honeycomb board via app.event = "pod.vast_error_seen".
-    track("pod.vast_error_seen", { "app.pod.machine_id": "27389" });
+    // Measurable, not just mapped: queryable on the Honeycomb board via
+    // app.event = "pod.vast_error_seen", tagged with the actual host so the
+    // series follows the rented box (was hardcoded "27389" on the old one).
+    track("pod.vast_error_seen", { "app.pod.machine_id": String(ins.machine_id ?? "unknown") });
   }
   if (ins.cur_state === "running" && ins.public_ipaddr && !tunnelMode())
     learnHost(ins.public_ipaddr, llamaPort(ins.ports));

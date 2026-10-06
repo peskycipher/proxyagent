@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **New model backend: `https://llama.proxyagent.rent`** (Cloudflare Tunnel in front of vast.ai instance 54266365, Qwen3.8 27B Uncensored Mythos Agentic Q4_K_M on 2×5090). The tunnel hostname is DNS-stable across stop→start IP churns — the worker keeps using it verbatim instead of re-learning the pod IP (`tunnelMode` in `src/lib/vast.ts`). Config is entirely Worker secrets: `LLAMA_SERVER_URL`, `LLAMA_API_KEY`, `LLAMA_MODEL_ID` (exact `--alias`: `Qwen3.8 27B Uncensored Mythos Agentic Q4_K_M`), and `VAST_INSTANCE_ID` repointed to 54266365 so the start-on-demand/idle-stop lifecycle follows the new box.
+- Thinking visibility: the new box serves Qwen3 with thinking enabled (`--reasoning-effort xhigh`), so replies open with minutes of `reasoning_content` deltas before the first visible token. `/api/chat` now shows a "model is thinking" status line once reasoning starts and clears it ("ready") when visible content resumes — previously the wait was silent, metered time. Reasoning deltas are never persisted into assistant messages.
+- Vast error teardown telemetry: `pod.vast_error_seen` now tags `app.pod.machine_id` with the host's actual machine id (fetched per instance) instead of the hardcoded old host "27389", so the Honeycomb series follows the rented box.
+
 - Chat sidebar: Portal/Sign-out moved into buttons; portal `Chat` button is blue when credits remain (>1s) and light grey + disabled at ≤1s.
 - `chat-client.tsx` split into focused components (`MessageList`, `Composer`, `ProfilePanel`, `ProfileSettingsModal`, plus shared `types.ts`); its inline styles moved to CSS classes.
 - Shared helpers: `requireUser()`/`unauthorized()` route guards (all API routes), `jsonSafe()` defensive JSON parsing.

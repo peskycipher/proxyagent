@@ -39,39 +39,32 @@ const IDLE_TIMEOUT_MS = () => Number(process.env.POD_IDLE_TIMEOUT_SECONDS || 600
 
 // ---------------------------------------------------------------- durable ---
 
-let cachedBinding: DurableObjectNamespace<PodController> | null | undefined;
-let cachedStub: PodController | null = null;
-
+/**
+ * Resolve the pod-control binding FRESH on every call.
+ *
+ * Durable-Object stubs (and the env they come from) are request-bound I/O
+ * objects in workerd: a stub created during request A throws "Cannot perform
+ * I/O on behalf of a different request" when reused from request B. Caching
+ * the stub/namespace module-globally made every podControl() call on a REUSED
+ * isolate fail — surfacing as "pod is in ERROR state" sends with a healthy
+ * pod, and a backend pill that flipped between live and null. getByName() is
+ * deterministic, so per-call stubs still hit the same actor.
+ */
 function resolveBinding(): DurableObjectNamespace<import("./PodController").PodController> | null {
-  if (cachedBinding !== undefined) return cachedBinding;
   const mode = (process.env.POD_CONTROL_MODE || "auto") as PodControlMode;
-  if (mode === "inline") {
-    cachedBinding = null;
-    return null;
-  }
+  if (mode === "inline") return null;
   try {
-    const ns = getCloudflareContext().env.POD_CONTROLLER as
+    return (getCloudflareContext().env.POD_CONTROLLER as
       | DurableObjectNamespace<PodController>
-      | undefined;
-    if (ns) {
-      cachedBinding = ns;
-      return ns;
-    }
-    logger.warn("POD_CONTROLLER binding missing; pod control falling back to inline");
+      | undefined) ?? null;
   } catch {
     // Outside workerd (next dev) or outside a request context — inline mode.
-    // The failure is NOT cached: a later request may have the binding.
     return null;
   }
-  cachedBinding = null;
-  return null;
 }
 
 function doStub(): PodController | null {
-  const ns = resolveBinding();
-  if (!ns) return null;
-  cachedStub ??= ns.getByName("pod-controller");
-  return cachedStub;
+  return resolveBinding()?.getByName("pod-controller") ?? null;
 }
 
 /** Run a control-plane call, degrading to no-op on any failure. */

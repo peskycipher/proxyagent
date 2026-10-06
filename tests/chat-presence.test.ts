@@ -37,7 +37,10 @@ describe("chat-presence", () => {
     await m.credit(uid, 100, "purchase:t");
     const bal = await m.openTick(uid, 1000);
     expect(bal).toBe(100);
-    const row = (await m.db.get("SELECT open_billed_at FROM users WHERE id = ?", uid))!;
+    const row = (await m.db.get(
+      "SELECT open_billed_at FROM users WHERE id = ?",
+      uid,
+    ))!;
     expect(row.open_billed_at).toBe(1000);
   });
 
@@ -70,13 +73,38 @@ describe("chat-presence", () => {
     expect(bal2).toBe(bal - 5);
   });
 
+  it("concurrent ticks bill the same window exactly once", async () => {
+    const m = await fresh();
+    const uid = await m.createUser("p7@example.com", "password123");
+    await m.credit(uid, 100, "purchase:t");
+    await m.openTick(uid, 1000);
+    // Two heartbeats racing on the same window (client retry/double-fire):
+    // only one may debit; the loser must not charge the user again.
+    const [a, b] = await Promise.all([
+      m.openTick(uid, 11_000),
+      m.openTick(uid, 11_000),
+    ]);
+    expect(Math.min(a, b)).toBe(90); // exactly one tick billed 10s
+    const openDebits = (await m.txnsFor(uid)).filter(
+      (t) => t.reason === "chat-open",
+    );
+    expect(openDebits).toHaveLength(1);
+    // Clock advanced to 11_000: a later tick bills only the fresh window.
+    expect(await m.openTick(uid, 12_000)).toBe(89);
+  });
+
   it("insufficient balance throws and does not advance the clock", async () => {
     const m = await fresh();
     const uid = await m.createUser("p4@example.com", "password123");
     await m.credit(uid, 5, "purchase:t");
     await m.openTick(uid, 1000);
-    await expect(m.openTick(uid, 1000 + 30_000)).rejects.toThrow(/insufficient/i);
-    const row = (await m.db.get("SELECT open_billed_at FROM users WHERE id = ?", uid))!;
+    await expect(m.openTick(uid, 1000 + 30_000)).rejects.toThrow(
+      /insufficient/i,
+    );
+    const row = (await m.db.get(
+      "SELECT open_billed_at FROM users WHERE id = ?",
+      uid,
+    ))!;
     expect(row.open_billed_at).toBe(1000);
   });
 
@@ -88,7 +116,10 @@ describe("chat-presence", () => {
     m.pauseStream(uid);
     expect(m.streamActive(uid)).toBe(true);
     expect(await m.openTick(uid, 61_000)).toBe(100); // 60s passed, nothing billed
-    const row = (await m.db.get("SELECT open_billed_at FROM users WHERE id = ?", uid))!;
+    const row = (await m.db.get(
+      "SELECT open_billed_at FROM users WHERE id = ?",
+      uid,
+    ))!;
     expect(row.open_billed_at).toBe(1000);
   });
 
@@ -107,7 +138,10 @@ describe("chat-presence", () => {
 });
 describe("chat-presence API route", () => {
   it("POST handler auths, ticks presence, maps insufficient credits to 402", async () => {
-    const src = (await import("node:fs")).readFileSync("src/app/api/chat-presence/route.ts", "utf8");
+    const src = (await import("node:fs")).readFileSync(
+      "src/app/api/chat-presence/route.ts",
+      "utf8",
+    );
     expect(src).toMatch(/export async function POST/);
     expect(src).toMatch(/openTick\(userId, Date\.now\(\)\)/);
     expect(src).toMatch(/status: 402/);

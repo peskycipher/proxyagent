@@ -39,7 +39,9 @@ export function streamActive(userId: string): boolean {
 }
 
 async function getOpenBilledAt(userId: string): Promise<number | null> {
-  const row = await (await getDb()).get<{ open_billed_at: number | null }>(
+  const row = await (
+    await getDb()
+  ).get<{ open_billed_at: number | null }>(
     "SELECT open_billed_at FROM users WHERE id = ?",
     userId,
   );
@@ -48,7 +50,26 @@ async function getOpenBilledAt(userId: string): Promise<number | null> {
 }
 
 async function setOpenBilledAt(userId: string, at: number): Promise<void> {
-  await (await getDb()).run("UPDATE users SET open_billed_at = ? WHERE id = ?", at, userId);
+  await (
+    await getDb()
+  ).run("UPDATE users SET open_billed_at = ? WHERE id = ?", at, userId);
+}
+
+/** Advance the billing clock only if it still reads `from` (CAS window claim). */
+async function claimClock(
+  userId: string,
+  from: number,
+  to: number,
+): Promise<boolean> {
+  const res = await (
+    await getDb()
+  ).run(
+    "UPDATE users SET open_billed_at = ? WHERE id = ? AND open_billed_at = ?",
+    to,
+    userId,
+    from,
+  );
+  return res.changes !== 0;
 }
 
 /**
@@ -68,11 +89,25 @@ export async function openTick(userId: string, now: number): Promise<number> {
     // Stream meter owns the billing; hold the clock still (no debit).
     return balanceSeconds(userId);
   }
-  const elapsed = Math.min(CATCHUP_CAP_SECONDS, Math.max(0, Math.ceil((now - startedAt) / 1000)));
+  const elapsed = Math.min(
+    CATCHUP_CAP_SECONDS,
+    Math.max(0, Math.ceil((now - startedAt) / 1000)),
+  );
   if (elapsed === 0) return balanceSeconds(userId);
-  // Debit before advancing: on insufficient credits the clock stays put so
-  // the unpaid window is not silently forgiven.
-  await debit(userId, elapsed, "chat-open");
-  await setOpenBilledAt(userId, now);
+  // Claim the window atomically (compare-and-set) BEFORE debiting: a
+  // concurrent heartbeat (client retry) or a resumeStream advancing the
+  // clock under us must not bill the same seconds twice. Losing the CAS
+  // means the window is already billed — charge nothing.
+  if (!(await claimClock(userId, startedAt, now)))
+    return balanceSeconds(userId);
+  // Debit after claiming; on insufficient credits move the clock back (same
+  // CAS — only if nothing changed it since) so the unpaid window is retried
+  // after a top-up, not silently forgiven.
+  try {
+    await debit(userId, elapsed, "chat-open");
+  } catch (e) {
+    await claimClock(userId, now, startedAt);
+    throw e;
+  }
   return balanceSeconds(userId);
 }

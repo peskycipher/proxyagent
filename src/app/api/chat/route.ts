@@ -1,8 +1,18 @@
 import { z } from "zod";
 import { requireUser, unauthorized } from "@/lib/route-session";
 import { balanceSeconds } from "@/lib/credits";
-import { ensureModelUp, modelChat, touchModelActivity, beginModelStream } from "@/lib/inference";
-import { billedStreamGate, BilledStream } from "@/lib/billed-stream";
+import {
+  ensureModelUp,
+  modelChat,
+  touchModelActivity,
+  beginModelStream,
+} from "@/lib/inference";
+import {
+  billedStreamGate,
+  BilledStream,
+  openAiSseDelta,
+  persistAssistantMessage,
+} from "@/lib/billed-stream";
 import { getDb, newId } from "@/lib/db";
 import { historyBudgets, trimHistory } from "@/lib/chat-history";
 import { logger } from "@/lib/logger";
@@ -34,17 +44,31 @@ export async function POST(req: Request) {
 
   const db = await getDb();
   const chatRow = chatId
-    ? (await db.get<{ id: string }>("SELECT id FROM chats WHERE id = ? AND user_id = ?", chatId, userId))
+    ? await db.get<{ id: string }>(
+        "SELECT id FROM chats WHERE id = ? AND user_id = ?",
+        chatId,
+        userId,
+      )
     : undefined;
   const effectiveChatId = chatRow?.id ?? newId("chat");
   if (!chatRow) {
     await db.run(
       "INSERT INTO chats (id, user_id, title, created_at) VALUES (?,?,?,?)",
-      effectiveChatId, userId, message.slice(0, 60), Date.now(),
+      effectiveChatId,
+      userId,
+      message.slice(0, 60),
+      Date.now(),
     );
   }
   const userMsgId = newId("msg");
-  await db.run("INSERT INTO messages (id, chat_id, role, content, created_at) VALUES (?,?,?,?,?)", userMsgId, effectiveChatId, "user", message, Date.now());
+  await db.run(
+    "INSERT INTO messages (id, chat_id, role, content, created_at) VALUES (?,?,?,?,?)",
+    userMsgId,
+    effectiveChatId,
+    "user",
+    message,
+    Date.now(),
+  );
 
   track("chat.request", {
     "app.user.id": userId,
@@ -53,11 +77,17 @@ export async function POST(req: Request) {
     "app.chat.message_chars": message.length,
   });
 
-  const allHistory = await db
-    .all<{ role: string; content: string }>("SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at ASC", effectiveChatId);
+  const allHistory = await db.all<{ role: string; content: string }>(
+    "SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at ASC",
+    effectiveChatId,
+  );
   // Bound the prompt: newest messages win (see lib/chat-history.ts) so long
   // chats cannot overflow the model context or bloat every request.
-  const history = trimHistory(allHistory, historyBudgets().maxMessages, historyBudgets().maxChars);
+  const history = trimHistory(
+    allHistory,
+    historyBudgets().maxMessages,
+    historyBudgets().maxChars,
+  );
 
   const encoder = new TextEncoder();
   // Lifecycle (stop-loss abort, lock/lease heartbeat, metered debit, page-clock
@@ -73,7 +103,9 @@ export async function POST(req: Request) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (event: string, data: unknown) => {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        controller.enqueue(
+          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+        );
       };
       const startedAt = Date.now();
       let assistantContent = "";
@@ -81,13 +113,17 @@ export async function POST(req: Request) {
 
       const cleanup = async () => {
         await bs.cleanup(async (billed) => {
-          if (assistantContent) {
-            await db.run(
-              "INSERT INTO messages (id, chat_id, role, content, billed_seconds, created_at) VALUES (?,?,?,?,?,?)",
-              newId("msg"), effectiveChatId, "assistant", assistantContent, billed, Date.now(),
-            );
-          }
-          send("done", { billedSeconds: billed, chatId: effectiveChatId, balanceSeconds: await balanceSeconds(userId) });
+          await persistAssistantMessage(
+            db,
+            effectiveChatId,
+            assistantContent,
+            billed,
+          );
+          send("done", {
+            billedSeconds: billed,
+            chatId: effectiveChatId,
+            balanceSeconds: await balanceSeconds(userId),
+          });
           track("chat.completed", {
             "app.user.id": userId,
             "app.chat.id": effectiveChatId,
@@ -96,7 +132,11 @@ export async function POST(req: Request) {
             "app.chat.duration_ms": Date.now() - startedAt,
           });
         });
-        try { controller.close(); } catch { /* already closed */ }
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
       };
 
       try {
@@ -105,14 +145,25 @@ export async function POST(req: Request) {
         beginModelStream(userId);
 
         // 1) Model warmup with live status events (pod start can take minutes).
-        await ensureModelUp((msg) => send("status", { status: msg }), bs.aborter.signal);
+        await ensureModelUp(
+          (msg) => send("status", { status: msg }),
+          bs.aborter.signal,
+        );
 
         // 2) Stream from the active provider (OpenAI-compatible /v1/chat/completions).
         const upstreamRes = await modelChat(history, bs.aborter.signal);
         if (!upstreamRes.ok || !upstreamRes.body) {
-          logger.error("model upstream error", { chatId: effectiveChatId, status: upstreamRes.status });
-          track("chat.failed", { "app.chat.id": effectiveChatId, "app.chat.upstream_status": upstreamRes.status });
-          send("error", { message: `model upstream error ${upstreamRes.status}` });
+          logger.error("model upstream error", {
+            chatId: effectiveChatId,
+            status: upstreamRes.status,
+          });
+          track("chat.failed", {
+            "app.chat.id": effectiveChatId,
+            "app.chat.upstream_status": upstreamRes.status,
+          });
+          send("error", {
+            message: `model upstream error ${upstreamRes.status}`,
+          });
           cleanup();
           return;
         }
@@ -134,40 +185,33 @@ export async function POST(req: Request) {
           const lines = buffer.split("\n");
           buffer = lines.pop() ?? "";
           for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const payload = line.slice(6).trim();
-            if (payload === "[DONE]") continue;
-            try {
-              const json = JSON.parse(payload) as {
-                choices?: Array<{ delta?: { content?: string; reasoning_content?: string } }>;
-              };
-              const delta = json.choices?.[0]?.delta?.content;
-              const reasoning = json.choices?.[0]?.delta?.reasoning_content;
-              if (delta) {
-                if (sentThinking) {
-                  sentThinking = false;
-                  send("status", { status: "ready" }); // clears the thinking status line
-                }
-                assistantContent += delta;
-                send("token", { text: delta });
-              } else if (reasoning && !sentThinking) {
-                // The new box (vast instance 54266365) serves Qwen3 with
-                // enable_thinking + --reasoning-effort xhigh, so replies open
-                // with (possibly minutes of) reasoning_content deltas before
-                // the first content token. Show one status line so the wait
-                // reads as activity; never persist reasoning into the message.
-                sentThinking = true;
-                send("status", { status: "model is thinking" });
+            const delta = openAiSseDelta(line);
+            if (!delta) continue;
+            if (delta.content) {
+              if (sentThinking) {
+                sentThinking = false;
+                send("status", { status: "ready" }); // clears the thinking status line
               }
-            } catch {
-              // ignore malformed chunks
+              assistantContent += delta.content;
+              send("token", { text: delta.content });
+            } else if (delta.reasoning_content && !sentThinking) {
+              // The new box (vast instance 54266365) serves Qwen3 with
+              // enable_thinking + --reasoning-effort xhigh, so replies open
+              // with (possibly minutes of) reasoning_content deltas before
+              // the first content token. Show one status line so the wait
+              // reads as activity; never persist reasoning into the message.
+              sentThinking = true;
+              send("status", { status: "model is thinking" });
             }
           }
         }
         cleanup();
       } catch (e) {
         send("error", { message: (e as Error).message });
-        logger.error("chat stream failed", { chatId: effectiveChatId, error: (e as Error).message });
+        logger.error("chat stream failed", {
+          chatId: effectiveChatId,
+          error: (e as Error).message,
+        });
         cleanup();
       }
     },

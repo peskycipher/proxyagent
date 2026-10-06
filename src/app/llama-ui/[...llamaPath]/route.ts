@@ -1,9 +1,11 @@
 import { requireUser, unauthorized } from "@/lib/route-session";
+import { touchModelActivity, beginModelStream } from "@/lib/inference";
 import {
-  touchModelActivity,
-  beginModelStream,
-} from "@/lib/inference";
-import { billedStreamGate, BilledStream } from "@/lib/billed-stream";
+  billedStreamGate,
+  BilledStream,
+  openAiSseDelta,
+  persistAssistantMessage,
+} from "@/lib/billed-stream";
 import { getDb, newId } from "@/lib/db";
 import { track } from "@/lib/telemetry";
 import { llamaBase } from "@/lib/vast";
@@ -30,7 +32,9 @@ const up = async (path: string, init?: RequestInit): Promise<Response> => {
   return fetch(`${base}/${path}`, init);
 };
 
-const upstreamAuth = async (extra?: Record<string, string>): Promise<Record<string, string>> => {
+const upstreamAuth = async (
+  extra?: Record<string, string>,
+): Promise<Record<string, string>> => {
   const key = upstreamKey();
   return {
     authorization: `Bearer ${key}`,
@@ -39,14 +43,23 @@ const upstreamAuth = async (extra?: Record<string, string>): Promise<Record<stri
 };
 
 /** Authenticated 1:1 passthrough for non-billing endpoints (props, models, tokenize…). */
-async function passthrough(request: Request, llamaPath: string, method: string): Promise<Response> {
+async function passthrough(
+  request: Request,
+  llamaPath: string,
+  method: string,
+): Promise<Response> {
   const init: RequestInit = { method, headers: await upstreamAuth() };
   if (method !== "GET" && method !== "HEAD") {
     init.body = await request.arrayBuffer();
-    init.headers = await upstreamAuth({ "content-type": request.headers.get("content-type") ?? "application/json" });
+    init.headers = await upstreamAuth({
+      "content-type": request.headers.get("content-type") ?? "application/json",
+    });
   }
   const res = await up(llamaPath, init);
-  return new Response(res.body, { status: res.status, headers: passthroughHeaders(res) });
+  return new Response(res.body, {
+    status: res.status,
+    headers: passthroughHeaders(res),
+  });
 }
 
 function passthroughHeaders(res: Response): Headers {
@@ -79,7 +92,10 @@ function lastUserText(messages: ChatMsg[] | undefined): string {
 
 const billingPaths = new Set(["v1/chat/completions", "v1/completions"]);
 
-export async function POST(request: Request, ctx: { params: Promise<{ llamaPath: string[] }> }): Promise<Response> {
+export async function POST(
+  request: Request,
+  ctx: { params: Promise<{ llamaPath: string[] }> },
+): Promise<Response> {
   const user = await requireUser();
   if (!user) return unauthorized();
   const userId = user.id;
@@ -91,7 +107,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ llamaPath:
   return passthrough(request, llamaPath, "POST");
 }
 
-export async function GET(request: Request, ctx: { params: Promise<{ llamaPath: string[] }> }): Promise<Response> {
+export async function GET(
+  request: Request,
+  ctx: { params: Promise<{ llamaPath: string[] }> },
+): Promise<Response> {
   const user = await requireUser();
   if (!user) return unauthorized();
   const llamaPath = (await ctx.params).llamaPath.join("/");
@@ -116,44 +135,65 @@ export async function GET(request: Request, ctx: { params: Promise<{ llamaPath: 
  * OpenAI SSE client), and threads live browser-side — we persist only a flat
  * audit transcript (one chat row per completion).
  */
-async function proxyBillingCompletion(request: Request, userId: string, llamaPath: string): Promise<Response> {
+async function proxyBillingCompletion(
+  request: Request,
+  userId: string,
+  llamaPath: string,
+): Promise<Response> {
   // One stream per account + credit gate, shared with /api/chat.
   const gate = await billedStreamGate("llamaproxy", userId);
   if (gate instanceof Response) return gate;
   const balance = gate.balance;
 
-  const rawBody = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!rawBody) return Response.json({ error: "invalid request" }, { status: 400 });
+  const rawBody = (await request.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+  if (!rawBody)
+    return Response.json({ error: "invalid request" }, { status: 400 });
   const userText = lastUserText(rawBody.messages as ChatMsg[] | undefined);
 
   const db = await getDb();
   const chatId = newId("chat");
   await db.run(
     "INSERT INTO chats (id, user_id, title, created_at) VALUES (?,?,?,?)",
-    chatId, userId, userText.slice(0, 60) || "proxy chat", Date.now(),
+    chatId,
+    userId,
+    userText.slice(0, 60) || "proxy chat",
+    Date.now(),
   );
   if (userText) {
     await db.run(
       "INSERT INTO messages (id, chat_id, role, content, created_at) VALUES (?,?,?,?,?)",
-      newId("msg"), chatId, "user", userText.slice(0, 16000), Date.now(),
+      newId("msg"),
+      chatId,
+      "user",
+      userText.slice(0, 16000),
+      Date.now(),
     );
   }
 
   // Lifecycle (stop-loss abort, lock/lease heartbeat, metered debit, page-clock
   // resume, lock release) lives in lib/billed-stream.ts; this route supplies
   // only the audit-row persistence and completed event via the finalize callback.
-  const bs = new BilledStream({ source: "llamaproxy", userId, chatId, balance, debitRef: `llamaproxy:${chatId}` });
+  const bs = new BilledStream({
+    source: "llamaproxy",
+    userId,
+    chatId,
+    balance,
+    debitRef: `llamaproxy:${chatId}`,
+  });
   const startedAt = Date.now();
   let assistantContent = "";
 
   const cleanup = async () => {
     await bs.cleanup(async (billed) => {
-      if (assistantContent) {
-        await db.run(
-          "INSERT INTO messages (id, chat_id, role, content, billed_seconds, created_at) VALUES (?,?,?,?,?,?)",
-          newId("msg"), chatId, "assistant", assistantContent.slice(0, 16000), billed, Date.now(),
-        );
-      }
+      await persistAssistantMessage(
+        db,
+        chatId,
+        assistantContent.slice(0, 16000),
+        billed,
+      );
       track("llamaproxy.completed", {
         "app.user.id": userId,
         "app.chat.id": chatId,
@@ -171,9 +211,15 @@ async function proxyBillingCompletion(request: Request, userId: string, llamaPat
   });
 
   if (!upstream.ok || !upstream.body) {
-    track("llamaproxy.failed", { "app.chat.id": chatId, "app.upstream_status": upstream.status });
+    track("llamaproxy.failed", {
+      "app.chat.id": chatId,
+      "app.upstream_status": upstream.status,
+    });
     await bs.cleanup(); // no meter yet — teardown only
-    return new Response(upstream.body, { status: upstream.status, headers: passthroughHeaders(upstream) });
+    return new Response(upstream.body, {
+      status: upstream.status,
+      headers: passthroughHeaders(upstream),
+    });
   }
 
   // Warmup has to have happened BEFORE the model call for billing parity with
@@ -190,15 +236,8 @@ async function proxyBillingCompletion(request: Request, userId: string, llamaPat
       // Collect assistant text for the audit row while passing bytes through.
       const text = decoder.decode(chunk, { stream: true });
       for (const line of text.split("\n")) {
-        if (!line.startsWith("data: ") || line.includes("[DONE]")) continue;
-        const payload = line.slice(6).trim();
-        try {
-          const json = JSON.parse(payload) as { choices?: Array<{ delta?: { content?: string } }> };
-          const delta = json.choices?.[0]?.delta?.content;
-          if (delta) assistantContent += delta;
-        } catch {
-          // passthrough is byte-exact; malformed lines are not our problem
-        }
+        const delta = openAiSseDelta(line)?.content;
+        if (delta) assistantContent += delta;
       }
       controller.enqueue(chunk);
     },
@@ -209,7 +248,8 @@ async function proxyBillingCompletion(request: Request, userId: string, llamaPat
 
   return new Response(upstream.body.pipeThrough(passthroughStream), {
     headers: {
-      "content-type": upstream.headers.get("content-type") ?? "text/event-stream",
+      "content-type":
+        upstream.headers.get("content-type") ?? "text/event-stream",
       "cache-control": "no-cache, no-transform",
     },
   });

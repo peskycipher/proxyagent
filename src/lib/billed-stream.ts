@@ -4,8 +4,9 @@
  * pre-stream balance, lock/lease heartbeat, and the once-guarded teardown —
  * meter, debit of real usage, unfreeze the page-open clock, route finalize,
  * release both locks. Route-specific parts (transcript persistence, SSE
- * events, stream parsing) stay in the routes; this module owns the lifecycle
- * so billing/lock semantics change in exactly one place.
+ * events, stream parsing) stay in the routes, except the two shared helpers
+ * this module exports (openAiSseDelta, persistAssistantMessage); the lifecycle
+ * lives here so billing/lock semantics change in exactly one place.
  */
 import { Meter } from "@/lib/meter";
 import { pauseStream, resumeStream } from "@/lib/chat-presence";
@@ -15,17 +16,61 @@ import {
   renewChatLock,
   CHAT_LOCK_RENEW_INTERVAL_MS,
 } from "@/lib/chat-lock";
-import { beginModelStream, endModelStream, renewModelStream } from "@/lib/inference";
+import {
+  beginModelStream,
+  endModelStream,
+  renewModelStream,
+} from "@/lib/inference";
 import { balanceSeconds, debit } from "@/lib/credits";
 import { logger } from "@/lib/logger";
 import { track } from "@/lib/telemetry";
+import { newId, type Db } from "@/lib/db";
 
 export type BilledSource = "chat" | "llamaproxy";
+
+export interface OpenAiSseDelta {
+  content?: string;
+  reasoning_content?: string;
+}
+
+/**
+ * Parse one OpenAI-compatible SSE `data:` line into its delta. Returns null
+ * for non-`data:` lines, the `[DONE]` sentinel, and malformed JSON — callers
+ * skip nulls. /api/chat reacts to reasoning_content; the /llama-ui passthrough
+ * reads content only while forwarding bytes untouched.
+ */
+export function openAiSseDelta(line: string): OpenAiSseDelta | null {
+  if (!line.startsWith("data: ")) return null;
+  const payload = line.slice(6).trim();
+  if (payload === "[DONE]") return null;
+  try {
+    return (
+      (JSON.parse(payload) as { choices?: Array<{ delta?: OpenAiSseDelta }> })
+        .choices?.[0]?.delta ?? null
+    );
+  } catch {
+    return null;
+  }
+}
 
 const REJECT_REASON_KEY: Record<BilledSource, string> = {
   chat: "app.chat.reason",
   llamaproxy: "app.reason",
 };
+
+/** The assistant transcript/audit row both billed routes persist on teardown. */
+export async function persistAssistantMessage(
+  db: Db,
+  chatId: string,
+  content: string,
+  billedSeconds: number,
+): Promise<void> {
+  if (!content) return;
+  await db.run(
+    "INSERT INTO messages (id, chat_id, role, content, billed_seconds, created_at) VALUES (?,?,?,?,?,?)",
+    newId("msg"), chatId, "assistant", content, billedSeconds, Date.now(),
+  );
+}
 
 /**
  * Request prelude both billing routes share: one stream per account (TTL
@@ -37,13 +82,25 @@ export async function billedStreamGate(
   userId: string,
 ): Promise<Response | { balance: number }> {
   if (!(await acquireChatLock(userId))) {
-    track(`${source}.rejected`, { "app.user.id": userId, [REJECT_REASON_KEY[source]]: "already_streaming" });
-    return Response.json({ error: "another request is already streaming for this account" }, { status: 429 });
+    track(`${source}.rejected`, {
+      "app.user.id": userId,
+      [REJECT_REASON_KEY[source]]: "already_streaming",
+    });
+    return Response.json(
+      { error: "another request is already streaming for this account" },
+      { status: 429 },
+    );
   }
   const balance = await balanceSeconds(userId);
   if (balance < 1) {
-    track(`${source}.rejected`, { "app.user.id": userId, [REJECT_REASON_KEY[source]]: "insufficient_credits" });
-    return Response.json({ error: "insufficient credits — buy more time in the portal" }, { status: 402 });
+    track(`${source}.rejected`, {
+      "app.user.id": userId,
+      [REJECT_REASON_KEY[source]]: "insufficient_credits",
+    });
+    return Response.json(
+      { error: "insufficient credits — buy more time in the portal" },
+      { status: 402 },
+    );
   }
   return { balance };
 }
@@ -78,16 +135,27 @@ export class BilledStream {
   private cleanedUp = false;
 
   constructor(private p: BilledStreamOpts) {
-    this.stopLoss = setTimeout(() => this.aborter.abort(), Math.max(1, p.balance) * 1000);
+    this.stopLoss = setTimeout(
+      () => this.aborter.abort(),
+      Math.max(1, p.balance) * 1000,
+    );
     // Keep both locks alive while the stream runs — the chat lock TTL and the
     // pod-controller stream lease (runpod only) — renewing well inside both
     // TTLs so a minutes-long stream never expires mid-flight.
     this.heartbeat = setInterval(() => {
       renewChatLock(p.userId)
         .then((held) => {
-          if (!held) logger.error(`${p.source} lock lost mid-stream`, { userId: p.userId });
+          if (!held)
+            logger.error(`${p.source} lock lost mid-stream`, {
+              userId: p.userId,
+            });
         })
-        .catch((e) => logger.error(`${p.source} lock renew failed`, { userId: p.userId, error: (e as Error).message }));
+        .catch((e) =>
+          logger.error(`${p.source} lock renew failed`, {
+            userId: p.userId,
+            error: (e as Error).message,
+          }),
+        );
       renewModelStream(p.userId);
     }, CHAT_LOCK_RENEW_INTERVAL_MS);
   }
@@ -106,7 +174,9 @@ export class BilledStream {
    * a stuck lock would block this user's next message until the TTL lapses.
    * `beginModelStream` must have been called upstream (lease covers warmup).
    */
-  async cleanup(finalize?: (billed: number) => void | Promise<void>): Promise<void> {
+  async cleanup(
+    finalize?: (billed: number) => void | Promise<void>,
+  ): Promise<void> {
     if (this.cleanedUp) return;
     this.cleanedUp = true;
     clearTimeout(this.stopLoss);
@@ -120,15 +190,24 @@ export class BilledStream {
       await finalize?.(billed);
     } catch (e) {
       // debit failure: log loudly, but the stream is already over
-      logger.error(`${this.p.source} cleanup error`, { chatId: this.p.chatId, error: (e as Error).message });
-      track(`${this.p.source}.failed`, { "app.chat.id": this.p.chatId, "app.chat.error": "cleanup_error" });
+      logger.error(`${this.p.source} cleanup error`, {
+        chatId: this.p.chatId,
+        error: (e as Error).message,
+      });
+      track(`${this.p.source}.failed`, {
+        "app.chat.id": this.p.chatId,
+        "app.chat.error": "cleanup_error",
+      });
     }
     clearInterval(this.heartbeat);
     endModelStream(this.p.userId);
     try {
       await releaseChatLock(this.p.userId);
     } catch (e) {
-      logger.error(`${this.p.source} lock release failed`, { userId: this.p.userId, error: (e as Error).message });
+      logger.error(`${this.p.source} lock release failed`, {
+        userId: this.p.userId,
+        error: (e as Error).message,
+      });
     }
   }
 }

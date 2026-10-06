@@ -1,10 +1,11 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import path from "node:path";
 import fs from "node:fs";
 
 const TMP = path.join(process.cwd(), "data", "test-billed-stream.db");
 
 async function fresh() {
+  vi.resetModules();
   fs.mkdirSync(path.dirname(TMP), { recursive: true });
   if (fs.existsSync(TMP)) fs.rmSync(TMP);
   process.env.APP_DB_PATH = TMP;
@@ -21,6 +22,10 @@ afterEach(() => {
   vi.useRealTimers();
   if (fs.existsSync(TMP)) fs.rmSync(TMP);
   delete process.env.APP_DB_PATH;
+  vi.resetModules();
+});
+
+beforeEach(() => {
   vi.resetModules();
 });
 
